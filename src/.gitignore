@@ -1,0 +1,67 @@
+# .NET / VS
+bin/
+obj/
+*.user
+*.suo
+.vs/
+[Dd]ebug/
+[Rr]elease/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Rider / Resharper
+.idea/
+*.DotSettings.user
+
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+
+# NuGet
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+# MAUI / Xamarin
+*.apk
+*.aab
+*.ipa
+*.app
+
+# Build artifacts
+*.dll
+*.exe
+*.pdb
+
+# OS junk
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Database (local dev)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# Secrets (NEVER COMMIT)
+appsettings.local.json
+appsettings.Development.json
+*.local.json
+secrets.json
+
+# Test / coverage
+TestResults/
+coverage/
+*.trx
+*.coverage
+*.coveragexml

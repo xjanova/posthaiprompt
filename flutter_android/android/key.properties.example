@@ -1,0 +1,15 @@
+# Copy this file to `key.properties` and fill in your release signing details.
+# `key.properties` is gitignored — NEVER commit real values.
+#
+# To create a new keystore:
+#   keytool -genkey -v -keystore upload-keystore.jks \
+#     -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+#
+# Place upload-keystore.jks at android/app/upload-keystore.jks (or wherever
+# storeFile points). For CI, base64-encode and store as RELEASE_KEYSTORE_BASE64
+# secret on GitHub.
+
+storePassword=YOUR_STORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=upload
+storeFile=upload-keystore.jks

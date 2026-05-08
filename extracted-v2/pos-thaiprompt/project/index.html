@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8"/>
+  <title>Thaiprompt POS — UI Designs</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="styles.css"/>
+  <style>
+    html, body { margin: 0; padding: 0; overflow: hidden; height: 100%; background: #f0eee9; font-family: "Prompt", system-ui, sans-serif; }
+    #app { width: 100vw; height: 100vh; }
+    /* slight tweak to canvas labels for thai */
+    .dc-editable, .dc-labeltext { font-family: "Prompt", system-ui, sans-serif !important; }
+  </style>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="text/babel" src="design-canvas.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="tp-shared.jsx"></script>
+  <script type="text/babel" src="screens-cashier.jsx"></script>
+  <script type="text/babel" src="screens-payment.jsx"></script>
+  <script type="text/babel" src="screens-display.jsx"></script>
+  <script type="text/babel" src="screens-back.jsx"></script>
+  <script type="text/babel" src="screens-mobile.jsx"></script>
+  <script type="text/babel" src="screens-business.jsx"></script>
+  <script type="text/babel" src="screens-ops.jsx"></script>
+  <script type="text/babel" src="screens-extras.jsx"></script>
+
+  <script type="text/babel" data-presets="env,react">
+    const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+      "primary_hue": 220,
+      "accent_hue": 25,
+      "gold_hue": 80,
+      "background_warmth": "cool",
+      "glass_blur": 32,
+      "show_dots": true
+    }/*EDITMODE-END*/;
+
+    function Root() {
+      const [tw, setTweak] = window.useTweaks(TWEAK_DEFAULTS);
+
+      // apply tweaks as CSS vars on root
+      React.useEffect(() => {
+        const r = document.documentElement;
+        r.style.setProperty("--tp-teal", `oklch(.72 .13 ${tw.primary_hue})`);
+        r.style.setProperty("--tp-teal-deep", `oklch(.55 .13 ${tw.primary_hue + 5})`);
+        r.style.setProperty("--tp-teal-light", `oklch(.92 .06 ${tw.primary_hue - 10})`);
+        r.style.setProperty("--tp-coral", `oklch(.72 .18 ${tw.accent_hue})`);
+        r.style.setProperty("--tp-coral-deep", `oklch(.58 .18 ${tw.accent_hue})`);
+        r.style.setProperty("--tp-gold", `oklch(.82 .14 ${tw.gold_hue})`);
+        r.style.setProperty("--tp-glass-blur", `blur(${tw.glass_blur}px) saturate(180%)`);
+        if (tw.background_warmth === "warm") {
+          r.style.setProperty("--tp-cream", "oklch(.985 .015 80)");
+          r.style.setProperty("--tp-pearl", "oklch(.96 .02 80)");
+        } else if (tw.background_warmth === "neutral") {
+          r.style.setProperty("--tp-cream", "oklch(.985 .003 230)");
+          r.style.setProperty("--tp-pearl", "oklch(.96 .005 230)");
+        } else {
+          r.style.setProperty("--tp-cream", "oklch(.985 .008 220)");
+          r.style.setProperty("--tp-pearl", "oklch(.96 .012 220)");
+        }
+      }, [tw.primary_hue, tw.accent_hue, tw.gold_hue, tw.background_warmth, tw.glass_blur]);
+
+      const TP = window.TweaksPanel ? window.TweaksPanel : null;
+      const TS = window.TweakSection ? window.TweakSection : null;
+      const TR = window.TweakRadio ? window.TweakRadio : null;
+      const TSL = window.TweakSlider ? window.TweakSlider : null;
+      const TT = window.TweakToggle ? window.TweakToggle : null;
+
+      return (
+        <React.Fragment>
+          <DesignCanvas>
+            <DCSection id="hero" title="Thaiprompt POS — Windows / Cashier" subtitle="หน้าจอหลัก สำหรับขายและตัดบิล (1440 × 900) · ออกแบบเป็นแอปเดสก์ท็อป C# / WPF / .NET MAUI">
+              <DCArtboard id="cashier" label="01 · Cashier · จอขายหลัก" width={1440} height={900}>
+                <window.CashierScreen/>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="payment" title="ชำระเงิน · บิล · เข้าใช้งาน" subtitle="กระบวนการคิดเงิน, ใบเสร็จลูกค้า และเข้าสู่ระบบด้วย PIN">
+              <DCArtboard id="payment" label="02 · Payment · ชำระเงิน" width={1100} height={800}>
+                <window.PaymentScreen/>
+              </DCArtboard>
+              <DCArtboard id="receipt" label="03 · Receipt · ใบเสร็จ" width={360} height={640}>
+                <window.ReceiptScreen/>
+              </DCArtboard>
+              <DCArtboard id="login" label="04 · Login · เข้าสู่ระบบ" width={1280} height={800}>
+                <window.LoginScreen/>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="2nd" title="จอที่สอง · Customer Display + Kitchen Display" subtitle="จอลูกค้าโชว์ออเดอร์ + QR · จอครัว KDS แสดงคิวอาหาร · ทั้งสองจอแยกอิสระจาก POS หลัก">
+              <DCArtboard id="cust" label="05 · Customer Display · จอลูกค้า (จอที่ 2)" width={1280} height={800}>
+                <window.CustomerDisplay/>
+              </DCArtboard>
+              <DCArtboard id="kds" label="06 · Kitchen Display · จอครัว" width={1440} height={900}>
+                <window.KitchenDisplay/>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="back" title="งานหลังบ้าน · Dashboard + Inventory" subtitle="รายงานยอดขาย / สินค้าคงคลัง สำหรับเจ้าของร้านและผู้จัดการ">
+              <DCArtboard id="dash" label="07 · Sales Dashboard · แดชบอร์ด" width={1440} height={900}>
+                <window.DashboardScreen/>
+              </DCArtboard>
+              <DCArtboard id="inv" label="08 · Inventory · คลังสินค้า" width={1440} height={900}>
+                <window.InventoryScreen/>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="biz" title="บัญชี · บิล · ใบกำกับภาษี · NFC · เดลิเวอรี่" subtitle="งานเอกสารและการเงินครบวงจร พร้อม e-Tax กับ NFC contactless">
+              <DCArtboard id="acct" label="12 · การจัดการบัญชี" width={1440} height={900}>
+                <window.AccountingScreen/>
+              </DCArtboard>
+              <DCArtboard id="bill" label="13 · สร้างบิล" width={1440} height={900}>
+                <window.CreateBillScreen/>
+              </DCArtboard>
+              <DCArtboard id="tax" label="14 · ใบกำกับภาษี / ใบเสร็จรับเงิน" width={1440} height={900}>
+                <window.TaxInvoiceScreen/>
+              </DCArtboard>
+              <DCArtboard id="nfc" label="15 · NFC Card Scan" width={1280} height={800}>
+                <window.NFCScanScreen/>
+              </DCArtboard>
+              <DCArtboard id="dlv" label="16 · เดลิเวอรี่ · ติดตามไรเดอร์" width={1440} height={900}>
+                <window.DeliveryScreen/>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="ops" title="คลัง · ส่งของ · คูปอง · พนักงาน · แอดมิน" subtitle="ระบบจัดการเชิงปฏิบัติการ เชื่อมต่อ partner delivery + จัดการทีมและสิทธิ์">
+              <DCArtboard id="stock" label="17 · จัดการสต็อก / Stock Movements" width={1440} height={900}>
+                <window.StockManagementScreen/>
+              </DCArtboard>
+              <DCArtboard id="ship" label="18 · ส่งของไปผู้ให้บริการ" width={1440} height={900}>
+                <window.ShippingProvidersScreen/>
+              </DCArtboard>
+              <DCArtboard id="coupon" label="19 · ระบบคูปอง / โปรโมชั่น" width={1440} height={900}>
+                <window.CouponScreen/>
+              </DCArtboard>
+              <DCArtboard id="staff" label="20 · ระบบพนักงาน" width={1440} height={900}>
+                <window.StaffScreen/>
+              </DCArtboard>
+              <DCArtboard id="admin" label="21 · ระบบแอดมิน · ตั้งค่าและสิทธิ์" width={1440} height={900}>
+                <window.AdminScreen/>
+              </DCArtboard>
+              <DCArtboard id="barcode" label="22 · จัดการบาร์โค้ด · พิมพ์ฉลาก" width={1440} height={900}>
+                <window.BarcodeScreen/>
+              </DCArtboard>
+              <DCArtboard id="shiplabel" label="23 · พิมพ์ใบปะหน้าพัสดุ · ปิดงานส่ง" width={1440} height={900}>
+                <window.ShippingLabelScreen/>
+              </DCArtboard>
+            </DCSection>
+
+            <DCSection id="mobile" title="iOS / Android · iPad / Tablet" subtitle="แอปสำหรับ MAUI / .NET — รับออเดอร์ที่โต๊ะ ดูยอดขาย จัดการคลังจากมือถือ">
+              <DCArtboard id="ipad" label="09 · iPad · ผังโต๊ะพนักงาน" width={1024} height={768}>
+                <window.TabletWaiterScreen/>
+              </DCArtboard>
+              <DCArtboard id="m-order" label="10 · Mobile · รับออเดอร์ที่โต๊ะ" width={390} height={844}>
+                <window.MobileOrderScreen/>
+              </DCArtboard>
+              <DCArtboard id="m-mgr" label="11 · Mobile · ผู้จัดการ" width={390} height={844}>
+                <window.MobileManagerScreen/>
+              </DCArtboard>
+            </DCSection>
+          </DesignCanvas>
+
+          <window.TweaksPanel title="Tweaks">
+            <window.TweakSection label="สีหลัก"/>
+            <window.TweakSlider label="โทนหลัก (Hue)" value={tw.primary_hue} min={140} max={260} step={5} onChange={(v) => setTweak("primary_hue", v)}/>
+            <window.TweakSlider label="สีเน้น (Hue)" value={tw.accent_hue} min={0} max={60} step={5} onChange={(v) => setTweak("accent_hue", v)}/>
+            <window.TweakSlider label="ทองสยาม (Hue)" value={tw.gold_hue} min={50} max={110} step={5} onChange={(v) => setTweak("gold_hue", v)}/>
+            <window.TweakSection label="ความรู้สึก"/>
+            <window.TweakRadio label="โทนพื้น" value={tw.background_warmth} options={["cool", "neutral", "warm"]} onChange={(v) => setTweak("background_warmth", v)}/>
+            <window.TweakSlider label="ความเบลอกระจก" value={tw.glass_blur} min={6} max={40} step={2} unit="px" onChange={(v) => setTweak("glass_blur", v)}/>
+          </window.TweaksPanel>
+        </React.Fragment>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("app")).render(<Root/>);
+  </script>
+</body>
+</html>

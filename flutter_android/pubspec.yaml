@@ -1,0 +1,58 @@
+name: pos_thaiprompt
+description: "Thaiprompt POS — Android (by xman studio)"
+publish_to: 'none'
+
+# Version: <semver>+<buildNumber>
+# Auto-updater compares this against GitHub Releases tag (vX.Y.Z).
+# In Android: version → versionName, buildNumber → versionCode.
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Navigation
+  go_router: ^14.6.2
+
+  # HTTP client (for sync with Thaiprompt-Affiliate + GitHub Releases API)
+  dio: ^5.7.0
+
+  # Local storage
+  sqflite: ^2.4.1
+  path_provider: ^2.1.5
+  path: ^1.9.0
+  shared_preferences: ^2.3.3
+
+  # Auto-updater
+  ota_update: ^7.0.0
+  package_info_plus: ^8.1.1
+  permission_handler: ^11.3.1
+
+  # Typography — Prompt font (TH+EN) auto-downloaded at runtime
+  google_fonts: ^6.2.1
+
+  # Utils
+  intl: ^0.20.1
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  # Bundle Prompt + JetBrains Mono fonts later (place .ttf in assets/fonts/)
+  # fonts:
+  #   - family: Prompt
+  #     fonts:
+  #       - asset: assets/fonts/Prompt-Regular.ttf
+  #       - asset: assets/fonts/Prompt-Medium.ttf
+  #         weight: 500
+  #       - asset: assets/fonts/Prompt-SemiBold.ttf
+  #         weight: 600
+  #       - asset: assets/fonts/Prompt-Bold.ttf
+  #         weight: 700

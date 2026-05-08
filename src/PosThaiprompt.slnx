@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="PosThaiprompt.App/PosThaiprompt.App.csproj" />
+  <Project Path="PosThaiprompt.Core/PosThaiprompt.Core.csproj" />
+  <Project Path="PosThaiprompt.Data/PosThaiprompt.Data.csproj" />
+  <Project Path="PosThaiprompt.Hardware/PosThaiprompt.Hardware.csproj" />
+  <Project Path="PosThaiprompt.Sync/PosThaiprompt.Sync.csproj" />
+  <Project Path="PosThaiprompt.Tests/PosThaiprompt.Tests.csproj" />
+</Solution>
