@@ -1,0 +1,84 @@
+# ═══ Original handoff zips (large, source already extracted) ═══
+*.zip
+extracted/
+extracted-v2/
+
+# ═══ .NET / VS / MAUI ═══
+**/bin/
+**/obj/
+**/[Dd]ebug/
+**/[Rr]elease/
+**/.vs/
+**/*.user
+**/*.suo
+src/PosThaiprompt.App/Platforms/Windows/AppPackages/
+*.exe
+*.dll
+*.pdb
+*.dll.config
+*.exe.config
+
+# ═══ Flutter / Dart ═══
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/build/
+**/*.iml
+**/.idea/
+flutter_android/android/.gradle/
+flutter_android/android/captures/
+flutter_android/android/local.properties
+flutter_android/ios/Flutter/.last_build_id
+**/GeneratedPluginRegistrant.*
+flutter_android/.pub-cache/
+
+# ═══ Android signing — NEVER COMMIT ═══
+**/key.properties
+**/upload-keystore.jks
+**/*.jks
+**/*.keystore
+**/.github-secrets-*.txt
+*.p12
+*.pem
+
+# ═══ APK / AAB output ═══
+*.apk
+*.aab
+
+# ═══ JS / Node (mockup uses CDN, but just in case) ═══
+**/node_modules/
+
+# ═══ OS / IDE junk ═══
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+*.swp
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/launch.json
+
+# ═══ Local databases (offline-first dev) ═══
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
+# ═══ Local secrets / env ═══
+*.local.json
+appsettings.local.json
+appsettings.Development.json
+secrets.json
+.env
+.env.local
+.env.*.local
+
+# ═══ Coverage / test ═══
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+*.trx
