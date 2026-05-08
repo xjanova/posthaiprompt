@@ -22,6 +22,9 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Required for ota_update plugin (uses java.time / NIO APIs from Java 8+
+        // that need backporting on older Android API levels).
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -75,4 +78,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Backport modern Java APIs to older Android — required by ota_update.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
