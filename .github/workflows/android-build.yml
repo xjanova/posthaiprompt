@@ -13,11 +13,6 @@ on:
       - 'flutter_android/**'
       - '.github/workflows/android-build.yml'
   workflow_dispatch:
-    inputs:
-      release:
-        description: 'Create GitHub Release (only meaningful from a tag commit)'
-        type: boolean
-        default: false
 
 permissions:
   contents: write   # required to create releases
@@ -31,6 +26,13 @@ jobs:
     name: Build APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    # Lift secret into env once (cannot be referenced directly in step `if:`).
+    env:
+      RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+      RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+      RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+      RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
 
     steps:
       - name: Checkout
@@ -62,42 +64,49 @@ jobs:
         run: flutter analyze --no-fatal-infos --no-fatal-warnings || true
 
       - name: Decode keystore
-        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
-        env:
-          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        if: env.RELEASE_KEYSTORE_BASE64 != ''
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > android/app/upload-keystore.jks
           ls -la android/app/upload-keystore.jks
 
       - name: Write key.properties
-        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
-        env:
-          STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
-          KEY_PASSWORD:   ${{ secrets.RELEASE_KEY_PASSWORD }}
-          KEY_ALIAS:      ${{ secrets.RELEASE_KEY_ALIAS }}
+        if: env.RELEASE_KEYSTORE_BASE64 != ''
         run: |
           cat > android/key.properties <<EOF
-          storePassword=$STORE_PASSWORD
-          keyPassword=$KEY_PASSWORD
-          keyAlias=$KEY_ALIAS
+          storePassword=${RELEASE_STORE_PASSWORD}
+          keyPassword=${RELEASE_KEY_PASSWORD}
+          keyAlias=${RELEASE_KEY_ALIAS}
           storeFile=upload-keystore.jks
           EOF
 
+      - name: Resolve build name from tag (or fallback to dev)
+        id: vars
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "build_name=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "build_name=0.0.0-dev" >> "$GITHUB_OUTPUT"
+            echo "tag=dev" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build APK (release)
         run: |
-          flutter build apk --release --build-name=${GITHUB_REF_NAME#v} --build-number=${GITHUB_RUN_NUMBER}
+          flutter build apk --release \
+            --build-name=${{ steps.vars.outputs.build_name }} \
+            --build-number=${{ github.run_number }}
 
       - name: Rename APK
         run: |
           mkdir -p out
           cp build/app/outputs/flutter-apk/app-release.apk \
-             out/posthaiprompt-${GITHUB_REF_NAME:-dev}.apk
+             out/posthaiprompt-${{ steps.vars.outputs.tag }}.apk
           ls -la out/
 
       - name: Upload artifact (every run)
         uses: actions/upload-artifact@v4
         with:
-          name: posthaiprompt-apk-${{ github.ref_name || github.sha }}
+          name: posthaiprompt-apk-${{ steps.vars.outputs.tag }}
           path: flutter_android/out/*.apk
           retention-days: 30
 
