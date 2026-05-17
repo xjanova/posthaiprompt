@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- Thaiprompt POS — XAML ResourceDictionary
+     Drop into MAUI App.xaml / WPF App.xaml / WinUI 3 App.xaml under <Application.Resources><ResourceDictionary>.
+     All colors are PRE-CONVERTED from oklch() to sRGB hex. Do NOT change without re-running the conversion.
+     Reference values in pages via {StaticResource Tp.Color.Primary} / {StaticResource Tp.Shadow.Glass} etc.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml">
+
+  <!-- ============================================================ -->
+  <!-- COLOR TOKENS                                                 -->
+  <!-- ============================================================ -->
+  <Color x:Key="Tp.Color.Primary">#00BDBE</Color>
+  <Color x:Key="Tp.Color.PrimaryLight">#5DE7DC</Color>
+  <Color x:Key="Tp.Color.PrimaryDeep">#008889</Color>
+  <Color x:Key="Tp.Color.PrimarySoft">#B8F2EA</Color>
+  <Color x:Key="Tp.Color.PrimaryTint">#D4FBFA</Color>
+
+  <Color x:Key="Tp.Color.Coral">#FF6F69</Color>
+  <Color x:Key="Tp.Color.CoralLight">#FF9A8A</Color>
+  <Color x:Key="Tp.Color.CoralDeep">#C53637</Color>
+  <Color x:Key="Tp.Color.CoralTint">#FFE8E4</Color>
+
+  <Color x:Key="Tp.Color.Gold">#EDBC4A</Color>
+  <Color x:Key="Tp.Color.GoldLight">#FBD35F</Color>
+  <Color x:Key="Tp.Color.GoldDeep">#CA8A10</Color>
+  <Color x:Key="Tp.Color.GoldTint">#FFF0D4</Color>
+
+  <Color x:Key="Tp.Color.Indigo">#1A2B56</Color>
+  <Color x:Key="Tp.Color.IndigoDeep">#0C1331</Color>
+
+  <Color x:Key="Tp.Color.Purple">#4845A5</Color>
+  <Color x:Key="Tp.Color.PurpleDeep">#35226A</Color>
+
+  <Color x:Key="Tp.Color.SuccessFg">#1C8742</Color>
+  <Color x:Key="Tp.Color.SuccessDeep">#006925</Color>
+  <Color x:Key="Tp.Color.SuccessBg">#CAFACB</Color>
+
+  <Color x:Key="Tp.Color.WarningFg">#D29923</Color>
+  <Color x:Key="Tp.Color.WarningDeep">#7C4800</Color>
+  <Color x:Key="Tp.Color.WarningBg">#FFE6AE</Color>
+
+  <Color x:Key="Tp.Color.DangerFg">#E85854</Color>
+  <Color x:Key="Tp.Color.DangerDeep">#B94642</Color>
+  <Color x:Key="Tp.Color.DangerBg">#FFD7D0</Color>
+
+  <Color x:Key="Tp.Color.Ink">#141B24</Color>
+  <Color x:Key="Tp.Color.InkSoft">#454E58</Color>
+  <Color x:Key="Tp.Color.InkMute">#80878F</Color>
+  <Color x:Key="Tp.Color.Line">#D0D9DE</Color>
+
+  <Color x:Key="Tp.Color.BgCream">#F5FBFE</Color>
+  <Color x:Key="Tp.Color.BgPearl">#E9F4F7</Color>
+  <Color x:Key="Tp.Color.BgGradTop">#F1FAFD</Color>
+  <Color x:Key="Tp.Color.BgGradBot">#E0F3F4</Color>
+
+  <Color x:Key="Tp.Color.AmbientTeal">#8EFAF9</Color>
+  <Color x:Key="Tp.Color.AmbientCoral">#FFC4BD</Color>
+  <Color x:Key="Tp.Color.AmbientLavender">#CAE2FF</Color>
+  <Color x:Key="Tp.Color.AmbientGold">#FFE4A2</Color>
+
+  <Color x:Key="Tp.Color.GlassFillTop">#C7FFFFFF</Color>  <!-- white 78% -->
+  <Color x:Key="Tp.Color.GlassFillBot">#7AFFFFFF</Color>  <!-- white 48% -->
+  <Color x:Key="Tp.Color.GlassBorder">#A6FFFFFF</Color>   <!-- white 65% -->
+  <Color x:Key="Tp.Color.GlassHighlight">#D9FFFFFF</Color> <!-- white 85% -->
+
+  <!-- Solid SolidColorBrushes for convenience -->
+  <SolidColorBrush x:Key="Tp.Brush.Primary"     Color="{StaticResource Tp.Color.Primary}"/>
+  <SolidColorBrush x:Key="Tp.Brush.PrimaryDeep" Color="{StaticResource Tp.Color.PrimaryDeep}"/>
+  <SolidColorBrush x:Key="Tp.Brush.Coral"       Color="{StaticResource Tp.Color.Coral}"/>
+  <SolidColorBrush x:Key="Tp.Brush.Ink"         Color="{StaticResource Tp.Color.Ink}"/>
+  <SolidColorBrush x:Key="Tp.Brush.InkSoft"     Color="{StaticResource Tp.Color.InkSoft}"/>
+  <SolidColorBrush x:Key="Tp.Brush.InkMute"     Color="{StaticResource Tp.Color.InkMute}"/>
+  <SolidColorBrush x:Key="Tp.Brush.Line"        Color="{StaticResource Tp.Color.Line}"/>
+
+  <!-- ============================================================ -->
+  <!-- GRADIENT BRUSHES                                             -->
+  <!-- ============================================================ -->
+  <LinearGradientBrush x:Key="Tp.Gradient.AppBackground" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Offset="0" Color="{StaticResource Tp.Color.BgGradTop}"/>
+    <GradientStop Offset="1" Color="{StaticResource Tp.Color.BgGradBot}"/>
+  </LinearGradientBrush>
+
+  <LinearGradientBrush x:Key="Tp.Gradient.PrimaryButton" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Offset="0" Color="{StaticResource Tp.Color.PrimaryLight}"/>
+    <GradientStop Offset="1" Color="{StaticResource Tp.Color.PrimaryDeep}"/>
+  </LinearGradientBrush>
+
+  <LinearGradientBrush x:Key="Tp.Gradient.CoralButton" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Offset="0" Color="{StaticResource Tp.Color.CoralLight}"/>
+    <GradientStop Offset="1" Color="{StaticResource Tp.Color.CoralDeep}"/>
+  </LinearGradientBrush>
+
+  <LinearGradientBrush x:Key="Tp.Gradient.GoldButton" StartPoint="0,0" EndPoint="0,1">
+    <GradientStop Offset="0" Color="{StaticResource Tp.Color.GoldLight}"/>
+    <GradientStop Offset="1" Color="{StaticResource Tp.Color.GoldDeep}"/>
+  </LinearGradientBrush>
+
+  <LinearGradientBrush x:Key="Tp.Gradient.IndigoTotal" StartPoint="0,0" EndPoint="1,1">
+    <GradientStop Offset="0" Color="{StaticResource Tp.Color.Indigo}"/>
+    <GradientStop Offset="1" Color="{StaticResource Tp.Color.IndigoDeep}"/>
+  </LinearGradientBrush>
+
+  <LinearGradientBrush x:Key="Tp.Gradient.PremiumTier" StartPoint="0,0" EndPoint="1,1">
+    <GradientStop Offset="0"   Color="{StaticResource Tp.Color.Purple}"/>
+    <GradientStop Offset="0.7" Color="{StaticResource Tp.Color.PurpleDeep}"/>
+    <GradientStop Offset="1"   Color="#1F1240"/>
+  </LinearGradientBrush>
+
+  <LinearGradientBrush x:Key="Tp.Gradient.GlassSurface" StartPoint="0,0" EndPoint="1,1">
+    <GradientStop Offset="0" Color="{StaticResource Tp.Color.GlassFillTop}"/>
+    <GradientStop Offset="1" Color="{StaticResource Tp.Color.GlassFillBot}"/>
+  </LinearGradientBrush>
+
+  <!-- ============================================================ -->
+  <!-- TYPOGRAPHY                                                   -->
+  <!-- ============================================================ -->
+  <x:String x:Key="Tp.Font.Primary">Prompt</x:String>
+  <x:String x:Key="Tp.Font.Mono">JetBrains Mono</x:String>
+
+  <x:Double x:Key="Tp.Size.Display">64</x:Double>
+  <x:Double x:Key="Tp.Size.Title">28</x:Double>
+  <x:Double x:Key="Tp.Size.Subtitle">22</x:Double>
+  <x:Double x:Key="Tp.Size.H3">17</x:Double>
+  <x:Double x:Key="Tp.Size.Body">14</x:Double>
+  <x:Double x:Key="Tp.Size.Label">12</x:Double>
+  <x:Double x:Key="Tp.Size.Tiny">11</x:Double>
+  <x:Double x:Key="Tp.Size.Micro">10</x:Double>
+
+  <!-- ============================================================ -->
+  <!-- SHAPE                                                        -->
+  <!-- ============================================================ -->
+  <x:Double x:Key="Tp.Radius.Sm">10</x:Double>
+  <x:Double x:Key="Tp.Radius.Md">16</x:Double>
+  <x:Double x:Key="Tp.Radius.Lg">22</x:Double>
+  <x:Double x:Key="Tp.Radius.Xl">30</x:Double>
+  <x:Double x:Key="Tp.Radius.Pill">999</x:Double>
+
+  <!-- ============================================================ -->
+  <!-- SHADOWS (MAUI Shadow takes single set — for multi-layer       -->
+  <!-- glass effect, stack two <Border> with Shadow per the recipe   -->
+  <!-- in CSS_TO_XAML.md)                                            -->
+  <!-- ============================================================ -->
+  <Shadow x:Key="Tp.Shadow.Glass"   Brush="#3814284B" Offset="0,18" Radius="42" Opacity="1"/>
+  <Shadow x:Key="Tp.Shadow.Button"  Brush="#3814284B" Offset="0,6"  Radius="14" Opacity="1"/>
+  <Shadow x:Key="Tp.Shadow.Card"    Brush="#2814284B" Offset="0,10" Radius="30" Opacity="1"/>
+  <Shadow x:Key="Tp.Shadow.Key"     Brush="#2614284B" Offset="0,4"  Radius="10" Opacity="1"/>
+
+  <!-- ============================================================ -->
+  <!-- COMPONENT STYLES (MAUI examples — port to WPF/WinUI similarly)-->
+  <!-- ============================================================ -->
+
+  <!-- Glass card: Border with rounded radius + gradient fill + soft shadow -->
+  <Style x:Key="Tp.Style.GlassCard" TargetType="Border">
+    <Setter Property="Background"  Value="{StaticResource Tp.Gradient.GlassSurface}"/>
+    <Setter Property="Stroke"      Value="{StaticResource Tp.Color.GlassBorder}"/>
+    <Setter Property="StrokeThickness" Value="1"/>
+    <Setter Property="StrokeShape">
+      <RoundRectangle CornerRadius="{StaticResource Tp.Radius.Lg}"/>
+    </Setter>
+    <Setter Property="Shadow"      Value="{StaticResource Tp.Shadow.Glass}"/>
+    <Setter Property="Padding"     Value="22"/>
+  </Style>
+
+  <Style x:Key="Tp.Style.PrimaryButton" TargetType="Button">
+    <Setter Property="Background"   Value="{StaticResource Tp.Gradient.PrimaryButton}"/>
+    <Setter Property="TextColor"    Value="White"/>
+    <Setter Property="FontFamily"   Value="{StaticResource Tp.Font.Primary}"/>
+    <Setter Property="FontAttributes" Value="Bold"/>
+    <Setter Property="FontSize"     Value="15"/>
+    <Setter Property="HeightRequest" Value="44"/>
+    <Setter Property="CornerRadius" Value="{StaticResource Tp.Radius.Md}"/>
+    <Setter Property="Padding"      Value="20,0"/>
+    <Setter Property="Shadow"       Value="{StaticResource Tp.Shadow.Button}"/>
+  </Style>
+
+  <Style x:Key="Tp.Style.CoralButton" TargetType="Button">
+    <Setter Property="Background"   Value="{StaticResource Tp.Gradient.CoralButton}"/>
+    <Setter Property="TextColor"    Value="White"/>
+    <Setter Property="FontFamily"   Value="{StaticResource Tp.Font.Primary}"/>
+    <Setter Property="FontAttributes" Value="Bold"/>
+    <Setter Property="FontSize"     Value="15"/>
+    <Setter Property="HeightRequest" Value="44"/>
+    <Setter Property="CornerRadius" Value="{StaticResource Tp.Radius.Md}"/>
+    <Setter Property="Padding"      Value="20,0"/>
+    <Setter Property="Shadow"       Value="{StaticResource Tp.Shadow.Button}"/>
+  </Style>
+
+  <Style x:Key="Tp.Style.GhostButton" TargetType="Button">
+    <Setter Property="Background"   Value="#73FFFFFF"/>
+    <Setter Property="TextColor"    Value="{StaticResource Tp.Color.Ink}"/>
+    <Setter Property="FontFamily"   Value="{StaticResource Tp.Font.Primary}"/>
+    <Setter Property="FontSize"     Value="14"/>
+    <Setter Property="HeightRequest" Value="42"/>
+    <Setter Property="CornerRadius" Value="{StaticResource Tp.Radius.Md}"/>
+    <Setter Property="BorderColor"  Value="{StaticResource Tp.Color.Line}"/>
+    <Setter Property="BorderWidth"  Value="1"/>
+    <Setter Property="Padding"      Value="16,0"/>
+  </Style>
+
+</ResourceDictionary>

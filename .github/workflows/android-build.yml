@@ -3,14 +3,14 @@ name: Android · Build & Release APK
 # Triggers:
 #  - push tag like v1.2.3       → build signed release APK + create GitHub Release (auto-updater consumes this)
 #  - manual workflow_dispatch    → build APK without releasing (for testing)
-#  - PR to main affecting flutter_android → build APK + upload as artifact (smoke test, no release)
+#  - PR to main affecting flutter_app → build APK + upload as artifact (smoke test, no release)
 on:
   push:
     tags:
       - 'v*'
   pull_request:
     paths:
-      - 'flutter_android/**'
+      - 'flutter_app/**'
       - '.github/workflows/android-build.yml'
   workflow_dispatch:
 
@@ -19,7 +19,7 @@ permissions:
 
 defaults:
   run:
-    working-directory: flutter_android
+    working-directory: flutter_app
 
 jobs:
   build:
@@ -107,7 +107,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: posthaiprompt-apk-${{ steps.vars.outputs.tag }}
-          path: flutter_android/out/*.apk
+          path: flutter_app/out/*.apk
           retention-days: 30
 
       - name: Create GitHub Release (tags only)
@@ -117,7 +117,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           generate_release_notes: true
-          files: flutter_android/out/*.apk
+          files: flutter_app/out/*.apk
           body: |
             **Thaiprompt POS — Android**
 

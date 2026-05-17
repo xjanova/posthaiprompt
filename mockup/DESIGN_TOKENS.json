@@ -1,0 +1,109 @@
+{
+  "$schema": "Thaiprompt POS — Design Tokens v1",
+  "_about": "Single source of truth. All values are pre-converted from CSS oklch() into sRGB hex so C# / XAML (which does not support oklch) renders identically.",
+  "color": {
+    "primary":         { "hex": "#00BDBE", "oklch": "oklch(.72 .13 195)", "use": "Brand teal — primary buttons, links, accent stroke" },
+    "primaryLight":    { "hex": "#5DE7DC", "oklch": "oklch(.85 .12 188)", "use": "Gradient top stop on glossy buttons" },
+    "primaryDeep":     { "hex": "#008889", "oklch": "oklch(.55 .13 195)", "use": "Hover / pressed, dark text on light bg" },
+    "primarySoft":     { "hex": "#B8F2EA", "oklch": "oklch(.92 .06 185)", "use": "Tinted background panel" },
+    "primaryTint":     { "hex": "#D4FBFA", "oklch": "oklch(.96 .04 195)", "use": "Very-soft cell background" },
+
+    "coral":           { "hex": "#FF6F69", "oklch": "oklch(.72 .18 25)",  "use": "Accent / CTA highlight" },
+    "coralLight":      { "hex": "#FF9A8A", "oklch": "oklch(.85 .18 28)",  "use": "Coral gradient top stop" },
+    "coralDeep":       { "hex": "#C53637", "oklch": "oklch(.55 .18 25)",  "use": "CTA bottom stop, danger heavy" },
+    "coralTint":       { "hex": "#FFE8E4", "oklch": "oklch(.96 .04 25)",  "use": "Tinted background panel" },
+
+    "gold":            { "hex": "#EDBC4A", "oklch": "oklch(.82 .14 85)",  "use": "Premium / member highlights" },
+    "goldLight":       { "hex": "#FBD35F", "oklch": "oklch(.88 .14 90)",  "use": "Gold gradient top stop" },
+    "goldDeep":        { "hex": "#CA8A10", "oklch": "oklch(.68 .14 75)",  "use": "Gold gradient bottom / text" },
+    "goldTint":        { "hex": "#FFF0D4", "oklch": "oklch(.96 .04 80)",  "use": "Tinted background panel" },
+
+    "indigo":          { "hex": "#1A2B56", "oklch": "oklch(.30 .08 265)", "use": "Total card / heavy text emphasis" },
+    "indigoDeep":      { "hex": "#0C1331", "oklch": "oklch(.20 .06 270)", "use": "Darkest panel / dark mode bg" },
+
+    "purple":          { "hex": "#4845A5", "oklch": "oklch(.45 .15 280)", "use": "Premium tier / customer display promo" },
+    "purpleDeep":      { "hex": "#35226A", "oklch": "oklch(.32 .12 290)", "use": "Premium gradient bottom" },
+
+    "successFg":       { "hex": "#1C8742", "oklch": "oklch(.55 .14 150)", "use": "Success text on light" },
+    "successDeep":     { "hex": "#006925", "oklch": "oklch(.45 .14 150)", "use": "Strong success text" },
+    "successBg":       { "hex": "#CAFACB", "oklch": "oklch(.94 .08 145)", "use": "Success pill background" },
+
+    "warningFg":       { "hex": "#D29923", "oklch": "oklch(.72 .14 80)",  "use": "Warning amber" },
+    "warningDeep":     { "hex": "#7C4800", "oklch": "oklch(.45 .14 80)",  "use": "Warning text on light" },
+    "warningBg":       { "hex": "#FFE6AE", "oklch": "oklch(.94 .08 80)",  "use": "Warning pill background" },
+
+    "dangerFg":        { "hex": "#E85854", "oklch": "oklch(.65 .18 25)",  "use": "Danger / out-of-stock / refund" },
+    "dangerDeep":      { "hex": "#B94642", "oklch": "oklch(.55 .15 25)",  "use": "Danger heavy text" },
+    "dangerBg":        { "hex": "#FFD7D0", "oklch": "oklch(.94 .08 25)",  "use": "Danger pill background" },
+
+    "ink":             { "hex": "#141B24", "oklch": "oklch(.22 .02 250)", "use": "Primary text" },
+    "inkSoft":         { "hex": "#454E58", "oklch": "oklch(.42 .02 250)", "use": "Secondary text" },
+    "inkMute":         { "hex": "#80878F", "oklch": "oklch(.62 .015 250)", "use": "Hint / placeholder text" },
+    "line":            { "hex": "#D0D9DE", "oklch": "oklch(.88 .012 230)", "use": "Borders, dividers" },
+
+    "bgCream":         { "hex": "#F5FBFE", "oklch": "oklch(.985 .008 220)", "use": "App background top" },
+    "bgPearl":         { "hex": "#E9F4F7", "oklch": "oklch(.96 .012 220)",  "use": "App background bottom" },
+    "bgGradTop":       { "hex": "#F1FAFD", "oklch": "oklch(.98 .01 220)",   "use": "Canvas gradient start" },
+    "bgGradBot":       { "hex": "#E0F3F4", "oklch": "oklch(.95 .02 200)",   "use": "Canvas gradient end" },
+
+    "neutral":         { "hex": "#9EBDCC", "oklch": "oklch(.78 .04 230)",  "use": "Inactive / unselected indicator" },
+
+    "ambient1":        { "hex": "#8EFAF9", "oklch": "oklch(.92 .10 195)",  "use": "Background radial orb (teal)" },
+    "ambient2":        { "hex": "#FFC4BD", "oklch": "oklch(.90 .10 25)",   "use": "Background radial orb (coral)" },
+    "ambient3":        { "hex": "#CAE2FF", "oklch": "oklch(.92 .10 270)",  "use": "Background radial orb (lavender)" },
+    "ambient4":        { "hex": "#FFE4A2", "oklch": "oklch(.93 .09 85)",   "use": "Background radial orb (gold)" },
+
+    "glassFillTop":    { "rgba": "rgba(255,255,255,0.78)", "use": "Glass surface gradient top" },
+    "glassFillBot":    { "rgba": "rgba(255,255,255,0.48)", "use": "Glass surface gradient bottom" },
+    "glassBorder":     { "rgba": "rgba(255,255,255,0.65)", "use": "Glass surface 1px stroke" },
+    "glassHighlight":  { "rgba": "rgba(255,255,255,0.85)", "use": "Top inset highlight (1px)" }
+  },
+
+  "font": {
+    "primary":  "Prompt, Inter, system-ui, sans-serif",
+    "mono":     "JetBrains Mono, SF Mono, Cascadia Code, monospace",
+    "_note": "Google 'Prompt' covers TH + LATIN in one stack. Use 400 body / 500 label / 600 subtitle / 700 title / 800 display."
+  },
+
+  "size": {
+    "display": 64,
+    "title":   28,
+    "subtitle": 22,
+    "h3":       17,
+    "body":     14,
+    "label":    12,
+    "tiny":     11,
+    "micro":    10
+  },
+
+  "space": { "1": 4, "2": 8, "3": 12, "4": 14, "5": 18, "6": 22, "7": 24, "8": 32, "10": 40, "12": 48 },
+  "radius": { "sm": 10, "md": 16, "lg": 22, "xl": 30, "pill": 999 },
+
+  "shadow": {
+    "glass": [
+      { "inset": true,  "x": 0, "y":  1, "blur": 0,  "spread": 0,   "color": "rgba(255,255,255,0.90)" },
+      { "inset": true,  "x": 0, "y": -1, "blur": 0,  "spread": 0,   "color": "rgba(20,40,80,0.04)" },
+      { "inset": false, "x": 0, "y": 10, "blur": 28, "spread": -12, "color": "rgba(20,40,80,0.22)" },
+      { "inset": false, "x": 0, "y": 30, "blur": 60, "spread": -30, "color": "rgba(20,40,80,0.28)" }
+    ],
+    "button3D": [
+      { "inset": true,  "x": 0, "y":  1, "blur": 0,  "spread": 0,   "color": "rgba(255,255,255,0.60)" },
+      { "inset": true,  "x": 0, "y": -2, "blur": 0,  "spread": 0,   "color": "rgba(0,0,0,0.06)" },
+      { "inset": false, "x": 0, "y":  6, "blur": 14, "spread": -4,  "color": "rgba(20,40,80,0.22)" },
+      { "inset": false, "x": 0, "y":  2, "blur":  4, "spread": -1,  "color": "rgba(20,40,80,0.18)" }
+    ],
+    "card": "0 10px 30px -10px rgba(20,40,80,0.25)",
+    "key": "0 1px 0 rgba(255,255,255,0.95) inset, 0 -2px 0 rgba(212,221,228,1) inset, 0 6px 12px -4px rgba(20,40,80,0.15)"
+  },
+
+  "blur": { "glass": 22, "deep": 32 },
+
+  "gradient": {
+    "primaryButton":  "linear-gradient(180deg, #5DE7DC 0%, #008889 100%)",
+    "coralButton":    "linear-gradient(180deg, #FF9A8A 0%, #C53637 100%)",
+    "goldButton":     "linear-gradient(180deg, #FBD35F 0%, #CA8A10 100%)",
+    "indigoTotal":    "linear-gradient(140deg, #1A2B56 0%, #0C1331 100%)",
+    "premiumTier":    "linear-gradient(140deg, #4845A5 0%, #35226A 70%, #1F1240 100%)",
+    "appBg":          "linear-gradient(180deg, #F1FAFD 0%, #E0F3F4 100%)"
+  }
+}

@@ -2,6 +2,7 @@
 *.zip
 extracted/
 extracted-v2/
+extracted-final/
 
 # ═══ .NET / VS / MAUI ═══
 **/bin/

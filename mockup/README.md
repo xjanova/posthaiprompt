@@ -1,205 +1,121 @@
-# Thaiprompt POS — Mockup
+# Thaiprompt POS — Design Handoff Kit
 
-**Created by xman studio** · Visual prototype for the cross-platform POS app to be built at
-[github.com/xjanova/posthaiprompt](https://github.com/xjanova/posthaiprompt). Syncs with
-[github.com/xjanova/Thaiprompt-Affiliate](https://github.com/xjanova/Thaiprompt-Affiliate).
+**For Claude Code / any developer implementing this design in C#.**
 
-> **23 screens + 2 docs** · Thai + English · standalone HTML · 51 clickable hot-links wiring screens together
-
----
-
-## วิธีเปิดดู / How to view
-
-เปิดไฟล์ `index.html` ในเบราเซอร์ใดก็ได้ — ไม่มี build step, ไม่มี server.
-
-```
-start E:\Code\POS Thaiprompt\mockup\index.html       (Windows)
-open  mockup/index.html                              (Mac)
-```
-
-หรือใช้ Python http server:
-
-```
-python -m http.server 8080 --directory mockup
-```
+This bundle contains everything needed to recreate **39 hi-fi screens** of
+Thaiprompt POS in **C# / .NET MAUI / WPF / WinUI 3** with **no pixel drift**.
 
 ---
 
-## โครงสร้างไฟล์ / Files
+## 📖 Read in this order
 
-```
-mockup/
-├── index.html          ← entry point (open this in browser)
-├── README.md
-├── css/
-│   ├── tokens.css      ← design tokens (oklch, radii, glass shadows)
-│   └── styles.css      ← layout, components, screen frames
-└── js/
-    ├── i18n.js         ← Thai + English string dictionaries
-    ├── icons.js        ← SVG icons + 3D brand mark + fake QR/barcode
-    ├── screens.js      ← 23 screen renderers + 51 hot-link wires
-    └── app.js          ← shell + nav rail + language toggle
-```
+1. **`CLAUDE.md`** — Strict implementation rules. **READ FIRST.**
+2. **`SCREENS.md`** — Inventory of 35 screens, their sizes, source files, and key components.
+3. **`DESIGN_TOKENS.json`** — Single source of truth for all colors / fonts / sizes / radii / shadows. **All `oklch()` values pre-converted to sRGB hex.**
+4. **`App.xaml`** — Drop-in `ResourceDictionary` for MAUI / WPF / WinUI. Copy into your project's `App.xaml`.
+5. **`CSS_TO_XAML.md`** — Conversion guide. Every CSS pattern in the design mapped to its closest XAML equivalent (glass cards, 3D buttons, gradients, shadows, animations, icons).
+6. **`screenshots/`** — One PNG per screen. **Your pixel reference.** Open while implementing each screen.
+7. **`index.html`** — Open in Chrome/Edge to see the live mockups at full fidelity (with real CSS blur). The screenshot PNGs are approximate; the live HTML is exact.
 
 ---
 
-## หน้าจอที่ครอบคลุม / 23 Screens
+## ⚙️ Stack recommendation
 
-### 🏪 งานหน้าร้าน / Front of House
-| #  | Screen                | Form factor       | Routes to                              |
-|----|-----------------------|-------------------|----------------------------------------|
-| 01 | Login / PIN           | 1280×800 Windows  | → Cashier                               |
-| 02 | Cashier (main POS)    | 1440×900 Windows  | → Payment, Inventory, Dashboard, Tablet, Admin, Coupons, Staff, Login |
-| 03 | Payment               | 1100×800 modal    | → Receipt, NFC Scan, Coupons, Cashier  |
-| 15 | NFC Card Scan         | 1280×800          | → Payment, Cashier                      |
-| 04 | Receipt               | 380×720 thermal   | → Cashier, Customer Display, KDS       |
+User asked for **C# on Windows + iOS + Android**.
 
-### 📺 จอที่สอง / Secondary Displays
-| #  | Screen                | Form factor       | Notes                                   |
-|----|-----------------------|-------------------|-----------------------------------------|
-| 05 | Customer Display      | 1280×800 2nd mon  | Promo carousel · running total          |
-| 06 | Kitchen Display (KDS) | 1440×900          | 5-col tickets · color-coded by elapsed |
+| Use case | Recommended | Notes |
+|---|---|---|
+| Single-codebase all platforms | **.NET MAUI** | Easiest, but glass blur fakes via SkiaSharp on mobile |
+| Best Windows look | **WinUI 3** (POS terminal) + **MAUI** (mobile) | Real Acrylic on Windows · share `Tp.Shared` library |
+| WPF-familiar team | **Avalonia UI** | XAML, near-WPF API, cross-platform |
 
-### 🗄️ งานหลังบ้าน / Back Office
-| #  | Screen                | Form factor       | Routes to                              |
-|----|-----------------------|-------------------|----------------------------------------|
-| 07 | Sales Dashboard       | 1440×900          | → Inventory, Accounting, Staff, Coupons, Sync API |
-| 08 | Inventory             | 1440×900          | → Barcode, Stock Mgmt, Admin           |
-| 17 | Stock Movements       | 1440×900          | → Inventory, Barcode                    |
-| 20 | Staff                 | 1440×900          | → Accounting (payroll)                  |
-
-### 💰 บัญชี & เอกสาร / Accounting & Docs
-| #  | Screen                | Form factor       | Routes to                              |
-|----|-----------------------|-------------------|----------------------------------------|
-| 12 | Accounting / CoA      | 1440×900          | → Create Bill                           |
-| 13 | Create Bill           | 1440×900          | → Tax Invoice, Accounting              |
-| 14 | Tax Invoice / e-Tax   | 1440×900          | (ready to send to RD)                  |
-| 19 | Coupons / Promotions  | 1440×900          | → Dashboard (ROI)                       |
-
-### 🚚 ระบบจัดการ / Operations
-| #  | Screen                | Form factor       | Routes to                              |
-|----|-----------------------|-------------------|----------------------------------------|
-| 16 | Delivery / Riders     | 1440×900          | → Shipping Providers, Shipping Label   |
-| 18 | Shipping Providers    | 1440×900          | → Shipping Label, Admin                 |
-| 21 | Admin Settings        | 1440×900          | → Tax Invoice, Payment, Shipping, Sync |
-
-### 🏷️ พิมพ์ฉลาก & พัสดุ / Labels & Shipping
-| #  | Screen                | Form factor       | Routes to                              |
-|----|-----------------------|-------------------|----------------------------------------|
-| 22 | Barcode Manager       | 1440×900          | → Inventory                             |
-| 23 | Shipping Labels       | 1440×900          | → Shipping Providers, Delivery          |
-
-### 📱 iOS / Android
-| #  | Screen                | Form factor       | Routes to                              |
-|----|-----------------------|-------------------|----------------------------------------|
-| 09 | iPad Floor Plan       | 1024×768          | → Cashier (new order), Create Bill      |
-| 10 | Mobile · Order        | 390×844           | → Payment (cart), Cashier, Barcode      |
-| 11 | Mobile · Manager      | 390×844           | → Cashier, Stock Mgmt, Staff, Dashboard, Admin, Inventory |
-
-### 📚 Meta
-- **Overview** — index of every screen, click any card to navigate
-- **Architecture** — .NET MAUI stack, project structure, tech choices
-- **Sync & API** — REST endpoints, outbox pattern, conflict resolution
+Share between desktop & mobile projects:
+- `Tp.Shared` (.NET Standard 2.1) — domain models, services, formatters
+- `App.xaml` — tokens, brushes, styles (this folder)
+- `Prompt-*.ttf` (Google Font) + `JetBrains Mono-*.ttf`
+- SVG icons (extract from `tp-shared.jsx`)
 
 ---
 
-## User flow diagram
+## 🎯 35 screens
+
+See `SCREENS.md` for the full table. Quick overview:
 
 ```
-                ┌──────────┐
-                │  Login   │
-                └─────┬────┘
-                      ↓ (sign in)
-       ┌──────────────────────────────────┐
-       │           Cashier                │ ← top of every flow
-       └─┬───┬───┬───┬───┬───┬───┬─────┬──┘
-         │   │   │   │   │   │   │     │
-         ↓   ↓   ↓   ↓   ↓   ↓   ↓     ↓
-    Payment  Inv  Dash Tab Adm Coup  Staff  Logout
-       │
-       ↓ (confirm)
-   ┌──────────┐
-   │ Receipt  │ ─→ Customer Display, KDS, back to Cashier
-   └──────────┘
-
-   Card payment: Payment → NFC Scan → Receipt
-   Cash payment: Payment (numpad) → Receipt
-   QR PromptPay: Payment → NFC Scan (countdown) → Receipt
-
-   Back office:
-   Dashboard ⇄ Accounting ⇄ Create Bill → Tax Invoice (e-Tax)
-                          ⇄ Coupons (ROI)
-                          ⇄ Staff (payroll)
-
-   Operations:
-   Delivery ⇄ Shipping Providers → Shipping Label (4×6")
-   Inventory ⇄ Stock Movements ⇄ Barcode Manager
-
-   Mobile:
-   Mobile Order ⇄ Cashier (table)
-   Mobile Manager ⇄ Dashboard, Stock Mgmt, Staff, Inventory, Admin
+01-04  Cashier flow         (sales · payment · receipt · login)
+05-06  Secondary displays   (customer board · kitchen KDS)
+07-08  Back office          (dashboard · inventory)
+09-11  iPad + Mobile        (floor plan · order · manager)
+12-16  Business / Finance   (accounting · bill · tax invoice · NFC · delivery)
+17-21  Operations           (stock · shipping · coupons · staff · admin)
+22-23  Extras               (barcode · shipping label)
+24-29  Advanced             (CRM · shift · refund · PO · menu+BOM · multi-branch)
+30-32  Table ordering       (floor designer · self-order · live status)
+33-35  Loyalty              (membership tiers · discount center · affiliate)
+36-39  Customer Order Flow  (menu grid · item customize · cart review · confirmation)
 ```
 
 ---
 
-## ภาษา / Languages
+## 🔒 The "ห้ามเพี้ยน" guarantee
 
-ทุก string ผ่าน `window.I18N.t(key, vars)` หรือ inline `tr("ไทย", "English")`. คลิกปุ่ม **ไทย / EN** ที่มุมขวาบนเพื่อสลับภาษาทันที — ทุกหน้า re-render พร้อม strings ใหม่.
+Three things keep your C# implementation from drifting from the design:
 
-ตำแหน่งคำแปล:
-- **i18n.js** — strings ทั่วไปของ shell + nav
-- **screens.js** — strings เฉพาะ screen ใช้ helper `tr(th, en)`
+### 1. The tokens are pre-converted
+Modern CSS uses `oklch()` for harmonious color. XAML doesn't support
+`oklch()`. The hex values in `DESIGN_TOKENS.json` / `App.xaml` were
+computed via a real browser, not estimated — so the look stays identical.
 
-เพิ่มภาษาใหม่: เพิ่ม object ใหม่ใน `window.I18N` แล้วเพิ่มปุ่มใน `app.js`.
+### 2. The screenshots ARE the spec
+If your C# implementation doesn't match the screenshot pixel-for-pixel,
+the bug is in your implementation. Don't "improve" the design. If
+something feels off, check the screenshot first.
+
+### 3. The HTML is runnable
+Open `index.html` in Chrome. Inspect any element. Read the literal CSS
+value. Add it as a named token in `App.xaml`. Reference it. Never inline
+a magic number.
 
 ---
 
-## Hot-link wiring (51 routes)
+## 📁 Files in this folder
 
-Mockup นี้ไม่ใช่แค่ static — ทุกปุ่มสำคัญกดได้ และนำไปยังหน้าที่เกี่ยวข้อง:
-
-- ปุ่มทั้งหมดที่ navigate ใช้ `data-route="<screen-id>"` attribute
-- `app.js` ทำ event delegation บน root element — จับ click event แล้ว navigate
-- การ์ดใน Overview มี `data-nav` เช่นกัน — กด card ไปดู screen นั้น
-
-ตัวอย่าง:
-```html
-<button class="tp-btn tp-btn-coral" data-route="payment">
-  ชำระเงิน · ฿415
-</button>
+```
+README.md                    ← you are here
+CLAUDE.md                    ← strict implementation rules
+SCREENS.md                   ← per-screen specs
+DESIGN_TOKENS.json           ← tokens (oklch + hex)
+App.xaml                     ← drop-in XAML ResourceDictionary
+CSS_TO_XAML.md               ← translation guide
+screenshots/                 ← 35 PNG references
+  01-cashier.png
+  02-payment.png
+  …
+  35-affiliate.png
+index.html                   ← live runnable mockup
+styles.css                   ← canonical CSS source
+tp-shared.jsx                ← icons, logo, image placeholder
+screens-*.jsx                ← screen source code (read for layout values)
+screens-customerorder.jsx    ← screens 36-39 (Thai food customer self-order flow)
+CUSTOMER_ORDER_FLOW.md       ← detailed spec for screens 36-39
+design-canvas.jsx            ← canvas wrapper (presentation only, not product)
+tweaks-panel.jsx             ← theme tweaker (presentation only, not product)
 ```
 
-Click → `app.js` หา closest `[data-route]` → call `navigate("payment")` → render Payment screen.
+---
+
+## ❓ When you're stuck
+
+1. Open the matching `screenshots/##-name.png` next to your editor.
+2. Open `index.html` in a browser, find the screen, **right-click → Inspect**
+   to read the literal CSS value.
+3. Find the source JSX file named in `SCREENS.md` — search for the
+   component's content (e.g. "ค่าคอม") to jump to its definition.
+4. Pull the value into `App.xaml` as a new named token. Then reference
+   `{StaticResource Tp.…}` from your C# code.
+
+**Never invent values. Never deviate without checking.**
 
 ---
 
-## Design tokens
-
-ทุกค่าอยู่ใน `css/tokens.css`:
-- **สี**: teal `oklch(.72 .13 190)`, coral `oklch(.72 .18 25)`, gold `oklch(.82 .14 85)`, indigo `oklch(.30 .08 265)`
-- **เรเดียส**: 10/16/22/30/999
-- **Glass shadow**: 4-layer stack (top highlight inset + bottom shade inset + drop + contact)
-- **Type**: Prompt (TH+EN, 200–800) + JetBrains Mono (numerics)
-
----
-
-## ขั้นตอนต่อไป / Next steps
-
-1. แสดง mockup นี้ให้ stakeholder ดูเพื่อ sign-off design
-2. สร้าง .NET MAUI project ที่ `posthaiprompt/` ตามโครงสร้างใน `docs/ARCHITECTURE.md`
-3. แปลง design tokens เป็น `Resources/Styles/Tokens.xaml`
-4. สร้าง shared controls (`GlassCard`, `TPButton`, `Chip`, `KPI`, `ProductTile`)
-5. ลำดับ implement (M1 → M8) ตาม `docs/ARCHITECTURE.md` Roadmap
-
----
-
-## Credits
-
-- **Design system**: based on `design_handoff_thaiprompt_pos` reference bundles (v1 + v2)
-- **Mockup**: Claude Code · xman studio · 2026-05-08
-- **Fonts**: Google Fonts "Prompt" + "JetBrains Mono" (SIL Open Font License)
-- **Icons**: Lucide-inspired stroke set, hand-coded as inline SVG
-
----
-
-Built with ❤ by **xman studio**
+*Designed by Claude (Anthropic) · Handoff target: Claude Code · 2026*
