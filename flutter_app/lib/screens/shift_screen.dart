@@ -9,6 +9,8 @@
 // a typed total), shows the variance against the expected cash live, takes a
 // note, confirms, closes the shift (Z snapshot) and opens the Z-Report
 // preview for printing. Past shifts can reprint their Z-Report.
+// "เปิดลิ้นชัก" kicks the cash drawer through the ESC/POS receipt printer
+// (manager PIN, audit log "drawer.open").
 //
 // by xman studio
 
@@ -18,6 +20,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/hardware/printer_hub.dart';
 import '../core/print/print_service.dart';
 import '../models/extra_models.dart';
 import '../models/order_models.dart';
@@ -85,7 +88,48 @@ class ShiftScreen extends StatefulWidget {
 }
 
 class _ShiftScreenState extends State<ShiftScreen> {
+  bool _openingDrawer = false;
+
   // ─────────────────────────── actions ───────────────────────────
+
+  /// "No sale" drawer open — manager PIN, audit-logged.
+  Future<void> _openDrawer() async {
+    if (_openingDrawer) return;
+    final hub = PrinterHub.instance;
+    if (!hub.usesEscPos) {
+      nvToast(context, 'ยังไม่ได้ตั้งเครื่องพิมพ์ใบเสร็จแบบ USB / LAN / บลูทูธ ที่ต่อลิ้นชักเงินสด', kind: NvToastKind.warning);
+      return;
+    }
+    final mgr = await showManagerPin(context, reason: 'เปิดลิ้นชักเงินสด (ไม่มีการขาย)');
+    if (mgr == null || !mounted) return;
+    setState(() => _openingDrawer = true);
+    try {
+      await hub.openDrawer();
+      if (!mounted) return;
+      final store = AppScope.read(context);
+      store.log('drawer.open', 'เปิดลิ้นชัก (ไม่มีการขาย) · อนุมัติโดย ${mgr.name}');
+      store.flush().ignore();
+      nvToast(context, 'เปิดลิ้นชักแล้ว', kind: NvToastKind.success);
+    } on PrinterException catch (e) {
+      if (mounted) nvToast(context, 'เปิดลิ้นชักไม่สำเร็จ: ${e.message}', kind: NvToastKind.error);
+    } catch (e) {
+      if (mounted) nvToast(context, 'เปิดลิ้นชักไม่สำเร็จ: $e', kind: NvToastKind.error);
+    } finally {
+      if (mounted) setState(() => _openingDrawer = false);
+    }
+  }
+
+  Widget _drawerButton() {
+    final ready = PrinterHub.instance.usesEscPos;
+    final btn = NvButton.soft('เปิดลิ้นชัก',
+        icon: NvIcons.drawer, size: NvButtonSize.sm, loading: _openingDrawer, onPressed: ready && !_openingDrawer ? _openDrawer : null);
+    return Tooltip(
+      message: ready
+          ? 'เปิดลิ้นชักเงินสดโดยไม่มีการขาย (ต้องใช้ PIN ผู้จัดการ)'
+          : 'ต้องตั้งเครื่องพิมพ์ใบเสร็จแบบ USB / LAN / บลูทูธ ที่ต่อลิ้นชักก่อน (ตั้งค่า › ใบเสร็จและเครื่องพิมพ์)',
+      child: btn,
+    );
+  }
 
   Future<void> _openShift() async {
     final store = AppScope.read(context);
@@ -201,6 +245,7 @@ class _ShiftScreenState extends State<ShiftScreen> {
       subtitle: 'เปิด–ปิดกะ · นับเงินสด · เงินเข้า–ออกลิ้นชัก · Z-Report',
       art: 'shift',
       actions: [
+        _drawerButton(),
         if (s != null && s.isOpen) NvButton.danger('ปิดกะ', icon: NvIcons.lock, size: NvButtonSize.sm, onPressed: _close),
       ],
       body: (s != null && s.isOpen) ? _openView(store, s) : _closedView(store),

@@ -10,7 +10,10 @@
 
 import 'catalog_models.dart';
 
-enum PaymentMethod { promptpay, card, cash, wallet }
+/// [thaiprompt] = the customer paid from their Thai Prompt wallet in the app
+/// (POS → Thai Prompt rider delivery). The shop is settled by Thai Prompt, so
+/// the bill is not re-uploaded by the POS sync and never touches the drawer.
+enum PaymentMethod { promptpay, card, cash, wallet, thaiprompt }
 
 extension PaymentMethodX on PaymentMethod {
   String get label => switch (this) {
@@ -18,6 +21,7 @@ extension PaymentMethodX on PaymentMethod {
         PaymentMethod.card => 'บัตรเครดิต / เดบิต',
         PaymentMethod.cash => 'เงินสด',
         PaymentMethod.wallet => 'อีวอลเล็ท',
+        PaymentMethod.thaiprompt => 'Thai Prompt · ส่งไรเดอร์',
       };
 
   /// Short label for the receipt footer ("ชำระโดย …").
@@ -26,6 +30,7 @@ extension PaymentMethodX on PaymentMethod {
         PaymentMethod.card => 'บัตร',
         PaymentMethod.cash => 'เงินสด',
         PaymentMethod.wallet => 'อีวอลเล็ท',
+        PaymentMethod.thaiprompt => 'Thai Prompt',
       };
 
   /// Nova 3D art key (`assets/nova/icons/<key>.webp`).
@@ -34,6 +39,7 @@ extension PaymentMethodX on PaymentMethod {
         PaymentMethod.card => 'card',
         PaymentMethod.cash => 'cash',
         PaymentMethod.wallet => 'wallet',
+        PaymentMethod.thaiprompt => 'delivery',
       };
 }
 

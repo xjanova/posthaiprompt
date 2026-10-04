@@ -3,6 +3,8 @@
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+#include "desktop_multi_window/desktop_multi_window_plugin.h"
+#include "window_placement.h"
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -25,6 +27,15 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  RegisterWindowPlacementChannel(flutter_controller_->engine()->messenger(), GetHandle());
+  // Customer-facing second screen: every extra window gets the plugins and the
+  // placement channel so it can move itself onto the second monitor.
+  DesktopMultiWindowSetWindowCreatedCallback([](void* controller) {
+    auto* view_controller = reinterpret_cast<flutter::FlutterViewController*>(controller);
+    RegisterPlugins(view_controller->engine());
+    RegisterWindowPlacementChannel(view_controller->engine()->messenger(),
+                                   view_controller->view()->GetNativeWindow());
+  });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {

@@ -282,6 +282,29 @@ class _MobileCatalogState extends State<MobileCatalog> {
     store.setSearch('');
   }
 
+  /// Camera scan → the same add-to-cart path as the scanner / Enter above
+  /// (mobileAddProduct: sold-out guard, options dialog). A plain product also
+  /// gets a toast since the camera hides the cart; unknown codes land in the
+  /// search box (filtering the menu) with an error toast.
+  Future<void> _onCameraScan(String raw) async {
+    if (!mounted) return;
+    final code = raw.trim();
+    if (code.isEmpty) return;
+    final store = AppScope.read(context);
+    final p = store.productByScan(code);
+    if (p == null) {
+      _search.text = code;
+      store.setSearch(code);
+      nvToast(context, 'ไม่พบสินค้ารหัส "$code"', kind: NvToastKind.error);
+      return;
+    }
+    final added = await mobileAddProduct(context, p);
+    if (!added || !mounted) return;
+    _search.clear();
+    store.setSearch('');
+    if (!p.hasOptions) nvToast(context, 'เพิ่ม ${p.name} แล้ว · ${baht(p.price)}', kind: NvToastKind.success);
+  }
+
   void _clearFilters() {
     final store = AppScope.read(context);
     _search.clear();
@@ -303,11 +326,21 @@ class _MobileCatalogState extends State<MobileCatalog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        NvSearchField(
-          controller: _search,
-          hint: 'ค้นหาเมนู · รหัส · บาร์โค้ด',
-          onChanged: (v) => AppScope.read(context).setSearch(v),
-          onSubmitted: _submit,
+        Row(
+          children: [
+            Expanded(
+              child: NvSearchField(
+                controller: _search,
+                hint: 'ค้นหาเมนู · รหัส · บาร์โค้ด',
+                onChanged: (v) => AppScope.read(context).setSearch(v),
+                onSubmitted: _submit,
+              ),
+            ),
+            if (nvCameraScanSupported) ...[
+              const SizedBox(width: 8),
+              NvScanButton(title: 'สแกนเมนูเข้าตะกร้า', onScanned: _onCameraScan),
+            ],
+          ],
         ),
         const SizedBox(height: 10),
         SizedBox(

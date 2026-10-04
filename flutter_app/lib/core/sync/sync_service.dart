@@ -148,8 +148,31 @@ class SyncService extends ChangeNotifier {
         }).toList(),
       };
     }).toList();
-    await api.uploadOrders(orders); // throws → caught by syncNow
-    outbox.markSent(pend.map((m) => m.id));
+    final res = await api.uploadOrders(orders); // throws → caught by syncNow
+    // The server answers 200 even when individual orders fail to save
+    // ({uploaded, errors:[{local_id, error}]}) — only mark the ones it took.
+    final failed = <String, String>{};
+    final errs = res['errors'];
+    if (errs is List) {
+      for (final e in errs) {
+        if (e is Map && e['local_id'] != null) failed['${e['local_id']}'] = '${e['error'] ?? 'บันทึกไม่สำเร็จ'}';
+      }
+    }
+    final ok = <String>[];
+    for (final m in pend) {
+      final localId = '${(m.payload['order'] as Map)['id']}';
+      final err = failed[localId];
+      if (err == null) {
+        ok.add(m.id);
+      } else {
+        outbox.markFailed(m.id, err);
+      }
+    }
+    if (ok.isNotEmpty) outbox.markSent(ok);
+    if (failed.isNotEmpty) {
+      message = 'เซิร์ฟเวอร์ยังรับบิลไม่ได้ ${failed.length} รายการ — จะลองส่งใหม่อัตโนมัติ';
+      throw ApiException(message!);
+    }
   }
 
   /// Pull the shop's real catalog (products + categories) into the store.

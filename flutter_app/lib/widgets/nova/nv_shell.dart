@@ -19,6 +19,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../core/sync/sync_service.dart';
 import '../../models/extra_models.dart';
+import '../../services/update_watcher.dart';
 import '../../state/app_scope.dart';
 import '../../theme/nv_icons.dart';
 import '../../theme/nv_tokens.dart';
@@ -467,7 +468,7 @@ class NvTopBar extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(children: [Expanded(child: titleBlock), const SizedBox(width: 8), lock]),
+            Row(children: [Expanded(child: titleBlock), NvUpdatePill(night: night), const SizedBox(width: 8), lock]),
             if (actions.isNotEmpty) ...[
               const SizedBox(height: 8),
               SingleChildScrollView(
@@ -505,6 +506,7 @@ class NvTopBar extends StatelessWidget {
             const SizedBox(width: 14),
             NvShiftChip(night: night),
             if (w >= 1050) ...[const SizedBox(width: 8), NvSyncPill(night: night)],
+            NvUpdatePill(night: night),
             if (w >= 900) ...[const SizedBox(width: 10), NvClock(night: night)],
             const SizedBox(width: 8),
             lock,

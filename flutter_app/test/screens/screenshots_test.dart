@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:pos_thaiprompt/data/local_store.dart';
 import 'package:pos_thaiprompt/routes/app_router.dart';
+import 'package:pos_thaiprompt/screens/tp_rider_dialog.dart';
 import 'package:pos_thaiprompt/state/pos_store.dart';
 import 'package:pos_thaiprompt/state/app_scope.dart';
 import 'package:pos_thaiprompt/theme/tp_theme.dart';
@@ -144,6 +145,79 @@ void main() {
         failures.isEmpty ? 'ALL OK (${routes.length} routes)\n' : failures.entries.map((e) => '${e.key}: ${e.value}').join('\n'));
     expect(failures, isEmpty, reason: failures.entries.map((e) => '${e.key}: ${e.value}').join('\n'));
   }, timeout: const Timeout(Duration(minutes: 10)), skip: const String.fromEnvironment('SCREENS') != '1');
+
+  testWidgets('Thai Prompt rider: QR dialog, paid dialog, customer display', (tester) async {
+    await _loadFonts();
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final out = Directory('build/screens/$sizeArg')..createSync(recursive: true);
+    final store = buildDemoStore();
+    store.login(store.activeStaff.first.id, demoPin);
+    final router = AppRouter.create(store);
+    final key = GlobalKey();
+    await tester.pumpWidget(RepaintBoundary(
+      key: key,
+      child: AppScope(store: store, child: MaterialApp.router(theme: TpTheme.light(), routerConfig: router, debugShowCheckedModeBanner: false)),
+    ));
+    await _precacheAll(tester);
+    final errors = <String>[];
+    final prev = FlutterError.onError;
+    FlutterError.onError = (d) => errors.add(d.exceptionAsString().split('\n').first);
+
+    Future<void> shot(String name) async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 120)));
+      await tester.pump(const Duration(milliseconds: 50));
+      final ex = tester.takeException();
+      if (ex != null) errors.add('$name: ${ex.toString().split('\n').first}');
+      final boundary = key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final bytes = await tester.runAsync(() async {
+        final img = await boundary.toImage(pixelRatio: 1);
+        final png = await img.toByteData(format: ui.ImageByteFormat.png);
+        img.dispose();
+        return png!.buffer.asUint8List();
+      });
+      File('${out.path}/$name.png').writeAsBytesSync(bytes!);
+    }
+
+    final waiting = store.deliveries.firstWhere((d) => d.awaitingPayment);
+    router.go('/delivery');
+    await shot('tp_delivery_board');
+    final ctx = router.routerDelegate.navigatorKey.currentContext!;
+    final done = showTpRiderDialog(ctx, resume: waiting);
+    await shot('tp_qr_dialog');
+    store.applyTpRiderStatus(waiting, {
+      'status': 'paid',
+      'delivery_fee': 38,
+      'order': {'order_number': 'ORD-2610-0902'},
+      'rider_job': {'status': 'pending'},
+    });
+    await shot('tp_paid_dialog');
+    await tester.tap(find.text('ดูใบเสร็จ'));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect((await done)?.outcome, TpRiderOutcome.paid);
+
+    final parked = store.createTpRiderJob(
+      requestId: 77,
+      qrPayload: 'TPPOS1.k3J9xQ2mVb7LpR4tYw8Zc1Nd6Hf0Gs5Ae9Ku3Jo',
+      expiresAt: DateTime.now().add(const Duration(minutes: 9, seconds: 41)),
+      lines: waiting.lines,
+      subtotal: waiting.subtotal,
+    );
+    store.showRiderQr(parked);
+    router.go('/display/customer');
+    await shot('tp_customer_display');
+    store.showRiderQr(null);
+
+    FlutterError.onError = prev;
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 1));
+    router.dispose();
+    store.dispose();
+    expect(errors, isEmpty, reason: errors.join('\n'));
+  }, skip: const String.fromEnvironment('SCREENS') != '1');
 
   testWidgets('first-run setup screen', (tester) async {
     await _loadFonts();

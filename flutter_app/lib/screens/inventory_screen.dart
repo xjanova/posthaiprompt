@@ -68,8 +68,44 @@ class InventoryScreen extends StatefulWidget {
 }
 
 class _InventoryScreenState extends State<InventoryScreen> {
+  final TextEditingController _search = TextEditingController();
   String _q = '';
   _InvFilter _filter = _InvFilter.all;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  /// Camera scan → the code goes into the search box (all filters cleared so
+  /// the row shows); an exact product match gets a quick "รับเข้า" action.
+  void _onCameraScan(String raw) {
+    if (!mounted) return;
+    final code = raw.trim();
+    if (code.isEmpty) return;
+    _search.text = code;
+    setState(() {
+      _q = code;
+      _filter = _InvFilter.all;
+    });
+    final p = AppScope.read(context).productByScan(code);
+    if (p == null) {
+      nvToast(context, 'ไม่พบสินค้ารหัส "$code"', kind: NvToastKind.error);
+    } else if (!p.trackStock) {
+      nvToast(context, 'พบ "${p.name}" · สินค้านี้ไม่ได้ติดตามสต็อก', kind: NvToastKind.info);
+    } else {
+      nvToast(
+        context,
+        'พบ "${p.name}" · คงเหลือ ${groupDigits(p.stock)}',
+        kind: NvToastKind.success,
+        actionLabel: 'รับเข้า',
+        onAction: () {
+          if (mounted) _move(p, _MoveKind.receive);
+        },
+      );
+    }
+  }
 
   // ───────────────────────── actions ─────────────────────────
 
@@ -310,7 +346,21 @@ class _InventoryScreenState extends State<InventoryScreen> {
                       children: [
                         SizedBox(
                           width: wide ? 360 : c.maxWidth,
-                          child: NvSearchField(hint: 'ค้นหาชื่อ รหัส หรือบาร์โค้ด', onChanged: (v) => setState(() => _q = v)),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: NvSearchField(
+                                  hint: 'ค้นหาชื่อ รหัส หรือบาร์โค้ด',
+                                  controller: _search,
+                                  onChanged: (v) => setState(() => _q = v),
+                                ),
+                              ),
+                              if (nvCameraScanSupported) ...[
+                                const SizedBox(width: 8),
+                                NvScanButton(title: 'สแกนหาสินค้าในคลัง', onScanned: _onCameraScan),
+                              ],
+                            ],
+                          ),
                         ),
                         NvChip('ทั้งหมด',
                             selected: _filter == _InvFilter.all,

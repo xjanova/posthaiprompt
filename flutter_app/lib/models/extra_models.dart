@@ -795,9 +795,40 @@ extension DeliveryStatusX on DeliveryStatus {
       };
 }
 
+/// Provider id of the built-in Thai Prompt rider network (not a manual provider).
+const kTpRiderProviderId = 'tp_rider';
+
+/// One line of a Thai Prompt rider request, priced by the server (the price the
+/// customer actually pays in the app) — kept so the sale can be recorded even
+/// when the payment lands after the cart is gone or the app restarted.
+class TpRiderLine {
+  final String code; // POS product code
+  final String name;
+  final int qty;
+  final int price; // baht per unit, server price
+  final String options; // "ใหญ่ · หวานน้อย" (informational)
+  final String note;
+  const TpRiderLine({required this.code, required this.name, required this.qty, required this.price, this.options = '', this.note = ''});
+
+  int get total => qty * price;
+
+  Map<String, dynamic> toJson() => {'code': code, 'name': name, 'qty': qty, 'price': price, 'options': options, 'note': note};
+
+  factory TpRiderLine.fromJson(Map<String, dynamic> j) => TpRiderLine(
+        code: (j['code'] as String?) ?? '',
+        name: (j['name'] as String?) ?? '',
+        qty: _i(j['qty'], 1),
+        price: _i(j['price']),
+        options: (j['options'] as String?) ?? '',
+        note: (j['note'] as String?) ?? '',
+      );
+}
+
 class DeliveryJob {
   final String id; // DL-0001
-  final String orderId;
+  /// POS bill id. Empty for a Thai Prompt rider job still waiting for the
+  /// customer to pay in the app (the bill is created when the payment lands).
+  String orderId;
   final DateTime createdAt;
   String customerName;
   String phone;
@@ -811,6 +842,20 @@ class DeliveryJob {
   DeliveryStatus status;
   DateTime? deliveredAt;
   String note;
+
+  // ── Thai Prompt rider (providerId == kTpRiderProviderId) ──
+  int? requestId; // server pos_delivery_requests.id
+  String qrPayload; // TPPOS1.<token> — shown until paid
+  DateTime? qrExpiresAt;
+  String payStatus; // pending | paid | expired | cancelled ('' = not a Thai Prompt job)
+  String riderStatus; // server rider_job.status ('' = no job yet)
+  String handoverStatus; // server handover.status
+  String remoteOrderNo; // server order_number
+  String riderPlate; // masked
+  String riderPhone; // masked
+  int subtotal; // server subtotal (what the customer paid for the goods)
+  List<TpRiderLine> lines;
+  DateTime? syncedAt; // last successful status poll
 
   DeliveryJob({
     required this.id,
@@ -828,7 +873,52 @@ class DeliveryJob {
     this.status = DeliveryStatus.pending,
     this.deliveredAt,
     this.note = '',
+    this.requestId,
+    this.qrPayload = '',
+    this.qrExpiresAt,
+    this.payStatus = '',
+    this.riderStatus = '',
+    this.handoverStatus = '',
+    this.remoteOrderNo = '',
+    this.riderPlate = '',
+    this.riderPhone = '',
+    this.subtotal = 0,
+    this.lines = const [],
+    this.syncedAt,
   });
+
+  bool get isTpRider => providerId == kTpRiderProviderId;
+
+  /// Waiting for the customer to scan + pay in the Thai Prompt app.
+  bool get awaitingPayment => isTpRider && payStatus == 'pending';
+
+  /// Still needs server polling (payment or rider progress pending).
+  bool get tpActive =>
+      isTpRider && requestId != null && status != DeliveryStatus.delivered && status != DeliveryStatus.cancelled;
+
+  /// Thai status line for the card, from the server's payment / rider state.
+  String get tpStatusLabel {
+    if (!isTpRider) return '';
+    switch (payStatus) {
+      case 'pending':
+        return 'รอลูกค้าสแกนชำระในแอป';
+      case 'expired':
+        return 'QR หมดอายุ — ลูกค้าไม่ได้ชำระ';
+      case 'cancelled':
+        return 'ยกเลิกคำขอแล้ว';
+    }
+    return switch (riderStatus) {
+      '' || 'pending' || 'searching' => 'ชำระแล้ว · กำลังหาไรเดอร์',
+      'accepted' || 'assigned' => 'ไรเดอร์รับงานแล้ว',
+      'picking_up' => 'ไรเดอร์กำลังมารับของที่ร้าน',
+      'picked_up' => 'ไรเดอร์รับของแล้ว',
+      'delivering' => 'กำลังไปส่งลูกค้า',
+      'delivered' || 'awaiting_release' => 'ถึงลูกค้าแล้ว · รอยืนยันรับของ',
+      'completed' => 'ลูกค้ารับของแล้ว',
+      'cancelled' || 'failed' => 'งานไรเดอร์มีปัญหา — แอดมิน Thai Prompt กำลังดูแล',
+      _ => 'ชำระแล้ว',
+    };
+  }
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -846,6 +936,20 @@ class DeliveryJob {
         'status': status.name,
         'deliveredAt': deliveredAt?.toIso8601String(),
         'note': note,
+        if (isTpRider) ...{
+          'requestId': requestId,
+          'qrPayload': qrPayload,
+          'qrExpiresAt': qrExpiresAt?.toIso8601String(),
+          'payStatus': payStatus,
+          'riderStatus': riderStatus,
+          'handoverStatus': handoverStatus,
+          'remoteOrderNo': remoteOrderNo,
+          'riderPlate': riderPlate,
+          'riderPhone': riderPhone,
+          'subtotal': subtotal,
+          'lines': lines.map((l) => l.toJson()).toList(),
+          'syncedAt': syncedAt?.toIso8601String(),
+        },
       };
 
   factory DeliveryJob.fromJson(Map<String, dynamic> j) => DeliveryJob(
@@ -864,6 +968,21 @@ class DeliveryJob {
         status: DeliveryStatus.values.firstWhere((s) => s.name == j['status'], orElse: () => DeliveryStatus.pending),
         deliveredAt: _dt(j['deliveredAt']),
         note: (j['note'] as String?) ?? '',
+        requestId: (j['requestId'] as num?)?.toInt(),
+        qrPayload: (j['qrPayload'] as String?) ?? '',
+        qrExpiresAt: _dt(j['qrExpiresAt']),
+        payStatus: (j['payStatus'] as String?) ?? '',
+        riderStatus: (j['riderStatus'] as String?) ?? '',
+        handoverStatus: (j['handoverStatus'] as String?) ?? '',
+        remoteOrderNo: (j['remoteOrderNo'] as String?) ?? '',
+        riderPlate: (j['riderPlate'] as String?) ?? '',
+        riderPhone: (j['riderPhone'] as String?) ?? '',
+        subtotal: _i(j['subtotal']),
+        lines: ((j['lines'] as List?) ?? const [])
+            .whereType<Map>()
+            .map((e) => TpRiderLine.fromJson(e.cast<String, dynamic>()))
+            .toList(),
+        syncedAt: _dt(j['syncedAt']),
       );
 }
 

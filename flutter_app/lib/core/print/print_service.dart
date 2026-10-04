@@ -7,6 +7,12 @@
 // label). Printing goes straight to the printer chosen in Settings when it is
 // found, otherwise the system print dialog opens. Share/save uses the same PDF.
 //
+// Roll documents (58/80 mm) go out as raw ESC/POS instead when Settings pick a
+// USB-Windows / LAN / Bluetooth receipt printer (PrinterHub): the same PNG is
+// rendered at the printer's dot width (384 / 576), thresholded to 1 bit and
+// sent as GS v 0 raster — identical Thai shaping, plus auto-cut and the cash
+// drawer kick.
+//
 // by xman studio
 
 import 'dart:async';
@@ -20,6 +26,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 
 import '../../theme/nv_tokens.dart';
+import '../hardware/printer_hub.dart';
 
 /// Paper / medium for a document.
 enum PrintMedium { roll58, roll80, a4, label100x150, label50x30 }
@@ -145,8 +152,11 @@ class PrintService {
     return doc.save();
   }
 
-  /// Render + print. Uses [printerName] directly when it exists, else the
-  /// system dialog. Returns a Thai status message for a toast.
+  /// Render + print. Roll media go to the ESC/POS receipt printer when one is
+  /// configured ([hardware] overrides the saved settings, e.g. an unsaved
+  /// settings form; [kickDrawer] pulses the cash drawer in the same job).
+  /// Otherwise uses [printerName] directly when it exists, else the system
+  /// dialog. Never throws — returns a Thai status message for a toast.
   static Future<PrintResult> printDoc(
     BuildContext context,
     Widget doc, {
@@ -155,8 +165,18 @@ class PrintService {
     String printerName = '',
     List<String> precache = const [],
     int copies = 1,
+    bool kickDrawer = false,
+    PrinterConfig? hardware,
   }) async {
     try {
+      final hw = hardware ?? PrinterHub.instance.config;
+      if (medium.isRoll && hw != null && hw.usesEscPos) {
+        // 1 rendered pixel = 1 printer dot (renderWidth 384/560 → 384/576 dots).
+        final png = await renderPng(context, doc,
+            width: medium.renderWidth, pixelRatio: hw.dotWidth / medium.renderWidth, precache: precache);
+        await PrinterHub.instance.printPng(png, kickDrawer: kickDrawer, copies: copies, config: hw);
+        return PrintResult(true, 'ส่งงานพิมพ์ไปที่ ${hw.label} แล้ว');
+      }
       final png = await renderPng(context, doc, width: medium.renderWidth, precache: precache);
       final pdf = await pdfFromPngs(List.filled(copies.clamp(1, 50), png), medium);
       final format = PdfPageFormat(medium.widthMm * PdfPageFormat.mm,
@@ -175,6 +195,8 @@ class PrintService {
       }
       final ok = await Printing.layoutPdf(onLayout: (_) async => pdf, name: jobName, format: format);
       return ok ? const PrintResult(true, 'ส่งงานพิมพ์แล้ว') : const PrintResult(false, 'ยกเลิกการพิมพ์');
+    } on PrinterException catch (e) {
+      return PrintResult(false, 'พิมพ์ไม่สำเร็จ: ${e.message}');
     } catch (e) {
       return PrintResult(false, 'พิมพ์ไม่สำเร็จ: ${_friendly(e)}');
     }

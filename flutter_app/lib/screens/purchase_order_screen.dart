@@ -846,6 +846,22 @@ class _PoComposerState extends State<_PoComposer> {
     });
   }
 
+  /// Camera scan in the picker → add / +1 that product line (like a scanner
+  /// Enter); an unknown code shows in the dialog's error line.
+  void _onCameraScan(String raw) {
+    if (!mounted) return;
+    final code = raw.trim();
+    if (code.isEmpty) return;
+    final p = AppScope.read(context).productByScan(code);
+    if (p == null) {
+      setState(() => _error = 'ไม่พบสินค้ารหัส "$code"');
+      return;
+    }
+    _add(p);
+    _search.clear();
+    setState(() => _q = '');
+  }
+
   void _step(_LineDraft l, int d) {
     final v = (l.qtyValue + d).clamp(1, 99999);
     l.qty.text = '$v';
@@ -1006,17 +1022,27 @@ class _PoComposerState extends State<_PoComposer> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          NvSearchField(
-            hint: 'ค้นหาสินค้า หรือสแกนบาร์โค้ด',
-            controller: _search,
-            onChanged: (v) => setState(() => _q = v),
-            onSubmitted: (v) {
-              final p = store.productByScan(v);
-              if (p == null) return;
-              _add(p);
-              _search.clear();
-              setState(() => _q = '');
-            },
+          Row(
+            children: [
+              Expanded(
+                child: NvSearchField(
+                  hint: 'ค้นหาสินค้า หรือสแกนบาร์โค้ด',
+                  controller: _search,
+                  onChanged: (v) => setState(() => _q = v),
+                  onSubmitted: (v) {
+                    final p = store.productByScan(v);
+                    if (p == null) return;
+                    _add(p);
+                    _search.clear();
+                    setState(() => _q = '');
+                  },
+                ),
+              ),
+              if (nvCameraScanSupported) ...[
+                const SizedBox(width: 8),
+                NvScanButton(title: 'สแกนสินค้าเข้าใบสั่งซื้อ', onScanned: _onCameraScan),
+              ],
+            ],
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(6, 6, 6, 4),

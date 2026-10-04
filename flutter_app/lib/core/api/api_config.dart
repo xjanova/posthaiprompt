@@ -54,4 +54,7 @@ class ApiPaths {
   // Order push + reporting (POST)
   static const syncOrders = '/api/pos/sync/orders';
   static const reportSales = '/api/pos/report/sales';
+
+  // Thai Prompt rider delivery requests (customer pays in the Thai Prompt app)
+  static const deliveryRequests = '/api/pos/delivery-requests';
 }

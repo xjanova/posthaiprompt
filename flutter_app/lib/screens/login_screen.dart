@@ -7,11 +7,15 @@
 //
 // by xman studio
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../models/extra_models.dart';
+import '../services/auto_updater.dart';
+import '../services/update_watcher.dart';
 import '../state/app_scope.dart';
 import '../widgets/nova/nova.dart';
 
@@ -307,6 +311,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     alignment: wide ? const Alignment(-0.72, 0) : Alignment.center,
                     child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: panel),
                   ),
+                  const Positioned(top: 18, left: 0, right: 0, child: Center(child: _AutoUpdateBanner())),
                   Positioned(
                     left: 24,
                     bottom: 14,
@@ -317,6 +322,106 @@ class _LoginScreenState extends State<LoginScreen> {
             },
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// On the login screen nobody is mid-sale, so a downloaded-and-ready update
+/// installs itself after a short, cancellable countdown (when auto-update is on).
+class _AutoUpdateBanner extends StatefulWidget {
+  const _AutoUpdateBanner();
+
+  @override
+  State<_AutoUpdateBanner> createState() => _AutoUpdateBannerState();
+}
+
+class _AutoUpdateBannerState extends State<_AutoUpdateBanner> {
+  static bool _cancelledThisSession = false;
+  Timer? _tick;
+  int _left = 15;
+
+  @override
+  void initState() {
+    super.initState();
+    UpdateWatcher.instance.addListener(_onUpdate);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onUpdate());
+  }
+
+  void _onUpdate() {
+    if (!mounted) return;
+    final w = UpdateWatcher.instance;
+    final store = AppScope.read(context);
+    final eligible = w.available != null &&
+        w.available!.hasInstaller &&
+        AutoUpdater.canSelfInstall &&
+        store.autoUpdate &&
+        !_cancelledThisSession &&
+        store.cart.isEmpty &&
+        !w.installing;
+    if (eligible && _tick == null) {
+      _left = 15;
+      _tick = Timer.periodic(const Duration(seconds: 1), (t) {
+        if (!mounted) return t.cancel();
+        setState(() => _left--);
+        if (_left <= 0) {
+          t.cancel();
+          _tick = null;
+          UpdateWatcher.instance.install(beforeRestart: AppScope.read(context).flush);
+        }
+      });
+    }
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    UpdateWatcher.instance.removeListener(_onUpdate);
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final w = UpdateWatcher.instance;
+    final info = w.available;
+    if (info == null || (!w.installing && _tick == null && w.error == null)) return const SizedBox.shrink();
+    final text = w.error != null
+        ? 'อัปเดตไม่สำเร็จ: ${w.error}'
+        : w.installing
+            ? 'กำลังอัปเดตเป็นเวอร์ชัน ${info.latestVersion} · ${w.status}'
+            : 'จะติดตั้งเวอร์ชันใหม่ ${info.latestVersion} อัตโนมัติใน $_left วินาที';
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 560),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
+      decoration: BoxDecoration(
+        color: Nv.navy900.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(Nv.rPill),
+        border: Border.all(color: Nv.lineNightStrong),
+        boxShadow: Nv.goldGlow(0.4),
+      ),
+      child: Row(
+        children: [
+          const Icon(NvIcons.download, size: 15, color: Nv.gold300),
+          const SizedBox(width: 10),
+          Expanded(child: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis, style: Nv.ui(13, color: Nv.onNight))),
+          if (!w.installing && _tick != null) ...[
+            NvButton.ghost('ยกเลิก', size: NvButtonSize.sm, onNight: true, onPressed: () {
+              _tick?.cancel();
+              setState(() {
+                _tick = null;
+                _cancelledThisSession = true;
+              });
+            }),
+            const SizedBox(width: 6),
+            NvButton.gold('ติดตั้งเลย', size: NvButtonSize.sm, onPressed: () {
+              _tick?.cancel();
+              setState(() => _tick = null);
+              UpdateWatcher.instance.install(beforeRestart: AppScope.read(context).flush);
+            }),
+          ],
+        ],
       ),
     );
   }

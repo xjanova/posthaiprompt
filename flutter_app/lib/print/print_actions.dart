@@ -1,6 +1,7 @@
 // Thaiprompt POS — One-call print helpers used by screens.
 //
 //   await printReceipt(context, order);           // prints, toasts, counts reprints
+//   await printReceipt(context, order, kickDrawer: true); // + cash drawer (ESC/POS)
 //   await shareReceipt(context, order);           // PDF share/save
 //
 // by xman studio
@@ -27,7 +28,9 @@ ReceiptDoc receiptDocFor(BuildContext context, Order order) {
   );
 }
 
-Future<bool> printReceipt(BuildContext context, Order order, {bool quiet = false}) async {
+/// [kickDrawer] opens the cash drawer in the same ESC/POS job (ignored when
+/// printing through the system driver / dialog).
+Future<bool> printReceipt(BuildContext context, Order order, {bool quiet = false, bool kickDrawer = false}) async {
   final store = AppScope.read(context);
   final doc = receiptDocFor(context, order);
   final res = await PrintService.printDoc(
@@ -37,6 +40,7 @@ Future<bool> printReceipt(BuildContext context, Order order, {bool quiet = false
     medium: rollMedium(store.paperWidthMm),
     printerName: store.printerName,
     precache: ReceiptDoc.precache,
+    kickDrawer: kickDrawer,
   );
   if (res.ok) store.markPrinted(order);
   if (context.mounted && (!quiet || !res.ok)) {

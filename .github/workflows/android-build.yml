@@ -1,7 +1,7 @@
 name: Android · Build & Release APK
 
 # Triggers:
-#  - push tag like v1.2.3       → build signed release APK + create GitHub Release (auto-updater consumes this)
+#  - push tag like v1.2.3       → build signed release APK + create a release (auto-updater consumes this)
 #  - manual workflow_dispatch    → build APK without releasing (for testing)
 #  - PR to main affecting flutter_app → build APK + upload as artifact (smoke test, no release)
 on:
@@ -116,21 +116,14 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
-          generate_release_notes: true
+          generate_release_notes: false
           files: flutter_app/out/*.apk
+          # Release notes are shown inside the app's update dialog — keep them
+          # end-user friendly (no build-system or hosting wording).
           body: |
-            **Thaiprompt POS — Android**
+            Thai Prompt POS ${{ github.ref_name }}
 
-            Built by GitHub Actions on ${{ github.sha }}.
+            • ติดตั้ง: เปิดไฟล์ .apk บนเครื่อง Android แล้วอนุญาตการติดตั้งแอป
+            • ผู้ใช้เดิม: แอปจะแจ้งอัปเดตและติดตั้งทับได้ทันที ข้อมูลร้านยังอยู่ครบ
 
-            ## Install
-            1. Download `posthaiprompt-${{ github.ref_name }}.apk`
-            2. Open on your Android device
-            3. Allow "Install from unknown sources" if prompted
-
-            ## Auto-update
-            Existing users see an update banner inside the app once this release is published.
-            Same signing key = clean overwrite, user data preserved.
-
-            ---
-            Built with ❤ by xman studio
+            xman studio · xman4289.com

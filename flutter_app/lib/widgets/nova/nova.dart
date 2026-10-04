@@ -12,5 +12,6 @@ export 'nv_backdrop.dart';
 export 'nv_bits.dart';
 export 'nv_buttons.dart';
 export 'nv_dialogs.dart';
+export 'nv_scanner.dart';
 export 'nv_shell.dart';
 export 'nv_surfaces.dart';

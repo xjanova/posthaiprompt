@@ -91,6 +91,19 @@ class _BarcodeScreenState extends State<BarcodeScreen> {
     });
   }
 
+  /// Camera scan → the same selection path as a scanner Enter (qty +1), plus a
+  /// confirmation toast since the list was hidden behind the camera.
+  void _onCameraScan(String raw) {
+    if (!mounted) return;
+    final code = raw.trim();
+    if (code.isEmpty) return;
+    final p = AppScope.read(context).productByScan(code);
+    _scan(code);
+    if (p != null) {
+      nvToast(context, 'เลือก "${p.name}" · ${groupDigits(_sel[p.code] ?? 1)} ดวง', kind: NvToastKind.success);
+    }
+  }
+
   Future<void> _print(List<(Product, int)> picked) async {
     final store = AppScope.read(context);
     final bad = picked.where((e) => !canEncodeLabel(e.$1.scanCode)).toList();
@@ -228,11 +241,21 @@ class _BarcodeScreenState extends State<BarcodeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          NvSearchField(
-            hint: 'ค้นหาสินค้า หรือสแกนบาร์โค้ดเพื่อเพิ่ม',
-            controller: _search,
-            onChanged: (v) => setState(() => _q = v),
-            onSubmitted: _scan,
+          Row(
+            children: [
+              Expanded(
+                child: NvSearchField(
+                  hint: 'ค้นหาสินค้า หรือสแกนบาร์โค้ดเพื่อเพิ่ม',
+                  controller: _search,
+                  onChanged: (v) => setState(() => _q = v),
+                  onSubmitted: _scan,
+                ),
+              ),
+              if (nvCameraScanSupported) ...[
+                const SizedBox(width: 8),
+                NvScanButton(title: 'สแกนสินค้าเพื่อพิมพ์ฉลาก', onScanned: _onCameraScan),
+              ],
+            ],
           ),
           const SizedBox(height: 8),
           Wrap(

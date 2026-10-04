@@ -910,6 +910,24 @@ class _ProductEditorState extends State<_ProductEditor> {
 
   void _fail(String msg) => setState(() => _error = msg);
 
+  /// Camera scan → fills the barcode field; warns right away (same rule as
+  /// _save) when another product already uses that code.
+  void _onBarcodeScanned(String raw) {
+    if (!mounted || _done) return;
+    // the field denies whitespace; GS1 codes may also carry control chars (GS)
+    final code = raw.replaceAll(RegExp(r'[\s\x00-\x1F\x7F]'), '');
+    if (code.isEmpty) return;
+    _barcode.text = code;
+    _touch();
+    for (final o in AppScope.read(context).products) {
+      if (o.code == widget.code) continue;
+      if (o.barcode == code || o.code == code) {
+        _fail('บาร์โค้ด "$code" ซ้ำกับ "${o.name}" (${o.code})');
+        return;
+      }
+    }
+  }
+
   /// Price / cost edits always rebuild (live margin readout).
   void _touchMoney(String _) => setState(() {
         _dirty = true;
@@ -1176,6 +1194,30 @@ class _ProductEditorState extends State<_ProductEditor> {
         child: Text(t, style: Nv.ui(12.5, color: Nv.ink2, weight: FontWeight.w600)),
       );
 
+  /// Barcode field + (phones/tablets) a camera scan button beside it.
+  Widget _barcodeField() {
+    final field = NvField(
+      label: 'บาร์โค้ด',
+      controller: _barcode,
+      icon: NvIcons.barcode,
+      hint: 'สแกนหรือพิมพ์ (ว่าง = ใช้รหัสสินค้า)',
+      formatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
+      onChanged: _touch,
+    );
+    if (!nvCameraScanSupported) return field;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(child: field),
+        const SizedBox(width: 8),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 2),
+          child: NvScanButton(title: 'สแกนบาร์โค้ดสินค้า', onScanned: _onBarcodeScanned),
+        ),
+      ],
+    );
+  }
+
   Widget _section(String t, IconData icon, {Widget? action}) => Padding(
         padding: const EdgeInsets.only(top: 22, bottom: 4),
         child: NvSectionTitle(t, icon: icon, action: action),
@@ -1316,14 +1358,7 @@ class _ProductEditorState extends State<_ProductEditor> {
               ),
             ],
           ),
-          NvField(
-            label: 'บาร์โค้ด',
-            controller: _barcode,
-            icon: NvIcons.barcode,
-            hint: 'สแกนหรือพิมพ์ (ว่าง = ใช้รหัสสินค้า)',
-            formatters: [FilteringTextInputFormatter.deny(RegExp(r'\s'))],
-            onChanged: _touch,
-          ),
+          _barcodeField(),
         ),
         const SizedBox(height: 12),
         NvField(label: 'รายละเอียด', controller: _desc, maxLines: 3, hint: 'แสดงในหน้าสั่งเองของลูกค้า', onChanged: _touch),

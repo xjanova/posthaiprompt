@@ -30,7 +30,7 @@ DeliveryJob? _jobById(PosStore s, String? id) {
 ShippingLabelDoc _docFor(PosStore s, DeliveryJob job) => ShippingLabelDoc(
       job: job,
       shop: ShopInfo.of(s),
-      providerName: s.providerById(job.providerId)?.name ?? job.providerId,
+      providerName: s.providerLabel(job.providerId),
       order: s.orderById(job.orderId),
     );
 

@@ -103,7 +103,9 @@ class ApiClient {
           throw ApiException(
             (body['message'] as String?) ?? 'คำขอไม่สำเร็จ',
             statusCode: status,
-            errors: (body['errors'] as Map?)?.cast<String, dynamic>(),
+            errors: _errors(body),
+            code: body['code']?.toString(),
+            data: body['data'],
           );
         }
         return body.containsKey('data') ? body['data'] : body;
@@ -113,14 +115,21 @@ class ApiClient {
 
     final message = (body is Map ? body['message'] as String? : null) ?? 'เกิดข้อผิดพลาด ($status)';
     if (status == 401) throw UnauthorizedException(message);
+    final code = body is Map ? body['code']?.toString() : null;
+    final data = body is Map ? body['data'] : null;
     if (status == 409) {
-      throw ConflictException(message, latest: (body is Map ? body['latest'] : null)?.cast<String, dynamic>());
+      throw ConflictException(message,
+          latest: (body is Map && body['latest'] is Map) ? (body['latest'] as Map).cast<String, dynamic>() : null,
+          code: code,
+          data: data);
     }
-    throw ApiException(
-      message,
-      statusCode: status,
-      errors: (body is Map ? body['errors'] as Map? : null)?.cast<String, dynamic>(),
-    );
+    throw ApiException(message, statusCode: status, errors: body is Map ? _errors(body) : null, code: code, data: data);
+  }
+
+  /// Laravel field errors (`{field: [msg]}`); other shapes are ignored.
+  static Map<String, dynamic>? _errors(Map body) {
+    final e = body['errors'];
+    return e is Map ? e.cast<String, dynamic>() : null;
   }
 
   ApiException _mapDio(DioException e) {

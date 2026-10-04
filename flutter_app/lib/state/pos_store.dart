@@ -10,6 +10,8 @@
 //
 // by xman studio
 
+import 'dart:convert' show jsonEncode;
+
 import 'package:flutter/foundation.dart' show ChangeNotifier;
 
 import '../core/api/api_config.dart';
@@ -179,6 +181,23 @@ class PosStore extends ChangeNotifier {
   int paperWidthMm = 80; // 58 | 80
   bool soundEnabled = true;
 
+  // ── Receipt printer hardware (ESC/POS) ──
+  /// 'system' (OS print dialog / driver, PDF) · 'windows' (raw ESC/POS to a
+  /// Windows printer queue — USB thermal printers) · 'network' (LAN, TCP 9100)
+  /// · 'bluetooth' (SPP; includes Sunmi built-in "InnerPrinter").
+  String printerMode = 'system';
+  String printerAddress = ''; // network: host[:port] · bluetooth: MAC
+  String printerDeviceName = ''; // human label (bluetooth device / windows queue)
+  bool printerAutoCut = true;
+  bool drawerOnCash = true; // kick the cash drawer after cash sales
+
+  // ── Customer-facing second screen ──
+  bool secondScreenEnabled = false;
+  String secondScreenId = ''; // platform display id ('' = first non-primary)
+
+  // ── App updates ──
+  bool autoUpdate = true; // install new versions by itself when the POS is idle
+
   // ── Server / sync (main.thaiprompt.online · POS terminal API) ──
   String serverBaseUrl = ApiConfig.defaultBaseUrl;
   String branchId = 'BR-01';
@@ -276,6 +295,14 @@ class PosStore extends ChangeNotifier {
       printerName = (s['printerName'] as String?) ?? printerName;
       paperWidthMm = (s['paperWidthMm'] as num?)?.toInt() ?? paperWidthMm;
       soundEnabled = (s['soundEnabled'] as bool?) ?? soundEnabled;
+      printerMode = (s['printerMode'] as String?) ?? printerMode;
+      printerAddress = (s['printerAddress'] as String?) ?? printerAddress;
+      printerDeviceName = (s['printerDeviceName'] as String?) ?? printerDeviceName;
+      printerAutoCut = (s['printerAutoCut'] as bool?) ?? printerAutoCut;
+      drawerOnCash = (s['drawerOnCash'] as bool?) ?? drawerOnCash;
+      secondScreenEnabled = (s['secondScreenEnabled'] as bool?) ?? secondScreenEnabled;
+      secondScreenId = (s['secondScreenId'] as String?) ?? secondScreenId;
+      autoUpdate = (s['autoUpdate'] as bool?) ?? autoUpdate;
       serverBaseUrl = (s['serverBaseUrl'] as String?) ?? serverBaseUrl;
       branchId = (s['branchId'] as String?) ?? branchId;
       terminalId = (s['terminalId'] as String?) ?? terminalId;
@@ -330,6 +357,14 @@ class PosStore extends ChangeNotifier {
           'printerName': printerName,
           'paperWidthMm': paperWidthMm,
           'soundEnabled': soundEnabled,
+          'printerMode': printerMode,
+          'printerAddress': printerAddress,
+          'printerDeviceName': printerDeviceName,
+          'printerAutoCut': printerAutoCut,
+          'drawerOnCash': drawerOnCash,
+          'secondScreenEnabled': secondScreenEnabled,
+          'secondScreenId': secondScreenId,
+          'autoUpdate': autoUpdate,
           'serverBaseUrl': serverBaseUrl,
           'branchId': branchId,
           'terminalId': terminalId,
@@ -1167,6 +1202,9 @@ class PosStore extends ChangeNotifier {
   /// reverses loyalty, keeps the bill with its refund amount. Returns baht refunded.
   int refundOrder(Order order, {Map<String, int>? qtyByCode, String reason = '', Staff? approvedBy}) {
     if (order.status != OrderStatus.paid) return 0;
+    // Paid from the customer's Thai Prompt wallet: only Thai Prompt can refund
+    // it (dispute in the app → admin), a POS refund would hand out cash.
+    if (order.method == PaymentMethod.thaiprompt) return 0;
     final ratio = order.subtotal == 0 ? 1.0 : order.total / order.subtotal;
     var gross = 0;
     for (final l in order.lines) {
@@ -1961,6 +1999,229 @@ class PosStore extends ChangeNotifier {
     _changed();
   }
 
+  // ─────────────────────────── Thai Prompt rider ───────────────────────────
+  //
+  // Cashier → "Thai Prompt · ส่งไรเดอร์" → the server prices the cart and
+  // returns a QR → the customer pays goods + delivery from their Thai Prompt
+  // wallet in the app → a rider picks up here. The POS bill is recorded only
+  // when the server reports the request paid (RiderTracker polls), from the
+  // server-priced lines kept on the job — so a payment that lands after the
+  // cart was parked, or after a restart, is still booked exactly once.
+
+  /// Job whose QR is on the customer display right now (null = none).
+  String? riderQrJobId;
+
+  DeliveryJob? get riderQrJob {
+    final id = riderQrJobId;
+    if (id == null) return null;
+    for (final d in deliveries) {
+      if (d.id == id) return d.awaitingPayment ? d : null;
+    }
+    return null;
+  }
+
+  void showRiderQr(DeliveryJob? j) {
+    final id = j?.id;
+    if (riderQrJobId == id) return;
+    riderQrJobId = id;
+    notifyListeners(); // display only — nothing to persist
+  }
+
+  List<DeliveryJob> get tpActiveJobs => deliveries.where((d) => d.tpActive).toList();
+
+  /// The counter cart as request items — one row per product (options / notes
+  /// travel in the request note: the online catalog has no POS modifiers).
+  List<Map<String, dynamic>> tpRiderRequestItems() {
+    final byCode = <String, Map<String, dynamic>>{};
+    for (final l in cart) {
+      final p = l.product;
+      final row = byCode.putIfAbsent(p.code, () => {
+            if (p.serverId != null) 'product_id': p.serverId,
+            'sku': p.code,
+            'name': p.name,
+            'qty': 0,
+          });
+      row['qty'] = (row['qty'] as int) + l.qty;
+    }
+    return byCode.values.toList();
+  }
+
+  /// Options / notes of the cart lines as text for the rider request note.
+  String tpRiderCartNote() => [
+        for (final l in cart)
+          if (l.options.isNotEmpty || l.note.isNotEmpty)
+            '${l.product.name}: ${[...l.options, if (l.note.isNotEmpty) l.note].join(' · ')}',
+      ].join(' / ');
+
+  /// Record a request the server just created. Re-POSTing the same local id
+  /// returns the same server request → the existing job is reused.
+  DeliveryJob createTpRiderJob({
+    required int requestId,
+    required String qrPayload,
+    required DateTime? expiresAt,
+    required List<TpRiderLine> lines,
+    required int subtotal,
+    String customerName = '',
+    String phone = '',
+    String note = '',
+  }) {
+    for (final d in deliveries) {
+      if (d.isTpRider && d.requestId == requestId) return d;
+    }
+    final job = DeliveryJob(
+      id: 'DL-${(_deliverySeq++).toString().padLeft(4, '0')}',
+      orderId: '',
+      createdAt: _now(),
+      customerName: customerName.trim(),
+      phone: phone.trim(),
+      providerId: kTpRiderProviderId,
+      note: note.trim(),
+      requestId: requestId,
+      qrPayload: qrPayload,
+      qrExpiresAt: expiresAt,
+      payStatus: 'pending',
+      subtotal: subtotal,
+      lines: lines,
+      weightGrams: 0,
+    );
+    deliveries.insert(0, job);
+    log('delivery.tp', '${job.id} ← request #$requestId ฿$subtotal');
+    _changed();
+    return job;
+  }
+
+  /// Next local id for a rider request (idempotency key on the server).
+  String get nextDeliveryId => 'DL-${_deliverySeq.toString().padLeft(4, '0')}';
+
+  /// Merge a server snapshot (`GET /api/pos/delivery-requests/{id}`). Books the
+  /// POS bill the first time the request is paid. Returns true when changed.
+  bool applyTpRiderStatus(DeliveryJob j, Map<String, dynamic> d) {
+    if (!j.isTpRider) return false;
+    final before = jsonEncode(j.toJson());
+    String str(Object? v) => v == null ? '' : '$v';
+    Map<String, dynamic>? obj(Object? v) => v is Map ? v.cast<String, dynamic>() : null;
+
+    final pay = str(d['status']);
+    if (pay.isNotEmpty) j.payStatus = pay;
+    final exp = DateTime.tryParse(str(d['expires_at']));
+    if (exp != null) j.qrExpiresAt = exp.toLocal();
+    final fee = d['delivery_fee'];
+    if (fee is num) j.fee = fee.round();
+    final order = obj(d['order']);
+    if (order != null && str(order['order_number']).isNotEmpty) j.remoteOrderNo = str(order['order_number']);
+    final cust = obj(d['customer']);
+    if (cust != null) {
+      if (str(cust['display_name']).isNotEmpty) j.customerName = str(cust['display_name']);
+      if (str(cust['address_short']).isNotEmpty) j.address = str(cust['address_short']);
+    }
+    final rj = obj(d['rider_job']);
+    if (rj != null) {
+      j.riderStatus = str(rj['status']);
+      if (str(rj['job_number']).isNotEmpty) j.trackingNo = str(rj['job_number']);
+      final r = obj(rj['rider']);
+      if (r != null) {
+        j.riderName = str(r['display_name']);
+        j.riderPlate = str(r['plate_masked']);
+        j.riderPhone = str(r['phone_masked']);
+      }
+    }
+    final ho = obj(d['handover']);
+    if (ho != null) j.handoverStatus = str(ho['status']);
+    j.syncedAt = _now();
+
+    // payment → POS bill (exactly once)
+    if (j.payStatus == 'paid' && j.orderId.isEmpty) {
+      final o = _recordTpSale(j);
+      j.orderId = o.id;
+    }
+    final next = switch (j.payStatus) {
+      'expired' || 'cancelled' => DeliveryStatus.cancelled,
+      'pending' => DeliveryStatus.pending,
+      _ => switch (j.riderStatus) {
+          'accepted' || 'assigned' || 'picking_up' => DeliveryStatus.picking,
+          'picked_up' || 'delivering' || 'delivered' || 'awaiting_release' => DeliveryStatus.delivering,
+          'completed' => DeliveryStatus.delivered,
+          _ => DeliveryStatus.pending,
+        },
+    };
+    if (next != j.status) {
+      j.status = next;
+      if (next == DeliveryStatus.delivered) j.deliveredAt ??= _now();
+      log('delivery.status', '${j.id} → ${j.tpStatusLabel}');
+    }
+    if (j.status == DeliveryStatus.cancelled && riderQrJobId == j.id) riderQrJobId = null;
+    final changed = jsonEncode(j.toJson()) != before;
+    if (changed) _changed();
+    return changed;
+  }
+
+  /// The paid request as a POS bill: server prices, VAT treated as included
+  /// (the app charged the final price), stock out, kitchen queued. Not sent
+  /// to the POS order sync — Thai Prompt already has this order.
+  Order _recordTpSale(DeliveryJob j) {
+    final now = _now();
+    final lines = <OrderLine>[
+      for (final l in j.lines)
+        () {
+          final p = productByCode(l.code);
+          return OrderLine(
+            name: l.name.isNotEmpty ? l.name : (p?.name ?? l.code),
+            code: l.code,
+            note: l.note,
+            qty: l.qty,
+            price: l.price,
+            hue: p?.hue ?? stableHue(l.name),
+            kind: p?.kind ?? 'rect',
+            options: l.options.isEmpty ? const [] : l.options.split(' · '),
+            cost: p?.cost ?? 0,
+            art: p?.art,
+          );
+        }(),
+    ];
+    final subtotal = j.subtotal > 0 ? j.subtotal : lines.fold<int>(0, (s, l) => s + l.lineTotal);
+    final tax = vatEnabled ? (subtotal * vatRate / (1 + vatRate)).round() : 0;
+    final order = Order(
+      id: openOrderId,
+      createdAt: now,
+      lines: lines,
+      subtotal: subtotal,
+      discount: 0,
+      tax: tax,
+      total: subtotal,
+      method: PaymentMethod.thaiprompt,
+      type: OrderType.delivery,
+      cashier: actorName,
+      customerName: j.customerName.isEmpty ? null : j.customerName,
+      staffId: currentStaff?.id,
+      shiftId: currentShift?.id,
+      paymentRef: j.remoteOrderNo.isEmpty ? 'TP-REQ-${j.requestId}' : j.remoteOrderNo,
+      source: OrderSource.delivery,
+      prep: kitchenEnabled ? PrepStatus.queued : PrepStatus.served,
+    );
+    for (final l in j.lines) {
+      final p = productByCode(l.code);
+      if (p != null) _move(p, -l.qty, StockMoveType.sale, ref: order.id);
+    }
+    orders.insert(0, order);
+    _lastOrder = order;
+    _orderSeq++;
+    log('checkout', '${order.id} Thai Prompt ฿${order.total} (${j.id})');
+    return order;
+  }
+
+  /// After the server accepted the cancel (or the QR expired).
+  void markTpRiderClosed(DeliveryJob j, {String payStatus = 'cancelled'}) {
+    if (!j.isTpRider || j.payStatus == 'paid') return;
+    j.payStatus = payStatus;
+    j.status = DeliveryStatus.cancelled;
+    if (riderQrJobId == j.id) riderQrJobId = null;
+    log('delivery.cancel', '${j.id} ($payStatus)');
+    _changed();
+  }
+
+  /// Display name of a delivery provider id (incl. the built-in Thai Prompt riders).
+  String providerLabel(String id) => id == kTpRiderProviderId ? 'ไรเดอร์ Thai Prompt' : (providerById(id)?.name ?? id);
+
   ShippingProvider? providerById(String id) {
     for (final p in shippingProviders) {
       if (p.id == id) return p;
@@ -2162,6 +2423,14 @@ class PosStore extends ChangeNotifier {
     String? printer,
     int? paperWidth,
     bool? sound,
+    String? printMode,
+    String? printAddress,
+    String? printDeviceName,
+    bool? autoCut,
+    bool? drawerAfterCash,
+    bool? secondScreen,
+    String? secondScreenDisplay,
+    bool? autoUpdates,
   }) {
     if (shop != null) shopName = shop.trim();
     if (branchName != null) {
@@ -2183,6 +2452,14 @@ class PosStore extends ChangeNotifier {
     if (printer != null) printerName = printer;
     if (paperWidth != null) paperWidthMm = paperWidth == 58 ? 58 : 80;
     if (sound != null) soundEnabled = sound;
+    if (printMode != null) printerMode = const {'system', 'windows', 'network', 'bluetooth'}.contains(printMode) ? printMode : 'system';
+    if (printAddress != null) printerAddress = printAddress.trim();
+    if (printDeviceName != null) printerDeviceName = printDeviceName.trim();
+    if (autoCut != null) printerAutoCut = autoCut;
+    if (drawerAfterCash != null) drawerOnCash = drawerAfterCash;
+    if (secondScreen != null) secondScreenEnabled = secondScreen;
+    if (secondScreenDisplay != null) secondScreenId = secondScreenDisplay;
+    if (autoUpdates != null) autoUpdate = autoUpdates;
     log('settings');
     _changed();
   }
@@ -2236,6 +2513,7 @@ class PosStore extends ChangeNotifier {
         available: old?.available ?? true,
         trackStock: old?.trackStock ?? true,
         options: old?.options ?? const [],
+        serverId: j['id'] is num ? (j['id'] as num).toInt() : int.tryParse('${j['id'] ?? ''}') ?? old?.serverId,
         stock: (j['stock'] as num?)?.round() ?? old?.stock ?? 0,
       );
       if (idx >= 0) {

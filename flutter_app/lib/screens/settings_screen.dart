@@ -2,42 +2,63 @@
 //
 // Sections, each with its own validation and "บันทึก" (all through
 // PosStore.updateSettings): ร้านค้า · การรับชำระ (PromptPay + live ฿1 test QR,
-// VAT) · ใบเสร็จและเครื่องพิมพ์ (footer, paper, OS printer list, auto-print,
-// real test print) · การทำงาน · เซิร์ฟเวอร์ Thai Prompt (the original pairing
-// flow: URL + product key + API key → pairTerminal, sync now, unpair with
-// confirm + manager PIN) · อัปเดตแอป (GitHub Releases auto-updater) ·
-// เกี่ยวกับ. Every controller is owned by this State and disposed with it.
+// VAT) · ใบเสร็จและเครื่องพิมพ์ (footer, paper, printer type: system driver /
+// USB on Windows / LAN-Wi-Fi / Bluetooth incl. Sunmi InnerPrinter, auto-cut,
+// cash drawer after cash sales, real test print / connection / drawer tests
+// with the unsaved choices) · การทำงาน · เซิร์ฟเวอร์ Thai Prompt (the original
+// pairing flow: URL + product key + API key → pairTerminal, sync now, unpair
+// with confirm + manager PIN) · อัปเดตแอป (UpdateWatcher: check, install,
+// auto-update when idle) · เกี่ยวกับ. Every controller is owned by this State
+// and disposed with it.
 //
 // by xman studio
 
-import 'package:flutter/foundation.dart' show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../core/api/api_exceptions.dart';
+import '../core/hardware/printer_hub.dart';
 import '../core/payments/promptpay.dart';
 import '../core/print/print_service.dart';
 import '../core/sync/sync_service.dart';
+import '../display/second_screen_settings.dart';
 import '../models/order_models.dart';
 import '../print/print_actions.dart' show rollMedium;
 import '../print/receipt_doc.dart';
 import '../services/auto_updater.dart';
+import '../services/update_watcher.dart';
 import '../state/app_scope.dart';
 import '../state/pos_store.dart';
 import '../widgets/nova/nova.dart';
 
-const _repoOwner = 'xjanova';
-const _repoName = 'posthaiprompt';
+/// Printer modes offered in the receipt section.
+const _escModes = {'windows', 'network', 'bluetooth'};
 
-enum _Sec { shop, payment, receipt, ops, server, update, about }
+/// LAN printer host field (IP or hostname only — the port has its own field).
+String? _hostError(String raw) {
+  final t = raw.trim();
+  if (t.isEmpty) return 'ใส่ IP ของเครื่องพิมพ์';
+  if (t.contains(RegExp(r'[\s/]'))) return 'ใส่เฉพาะ IP หรือชื่อเครื่อง (ไม่ต้องมี http://)';
+  if (RegExp(r'^[^:]+:\d*$').hasMatch(t)) return 'ใส่พอร์ตในช่อง "พอร์ต" แยกต่างหาก';
+  return null;
+}
+
+/// Update texts must never show hosting details or raw URLs.
+String _safeUpdateText(String s) {
+  final l = s.toLowerCase();
+  return l.contains('github') || l.contains('http') ? 'เชื่อมต่อเซิร์ฟเวอร์อัปเดตไม่ได้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่' : s;
+}
+
+enum _Sec { shop, payment, receipt, display, ops, server, update, about }
 
 extension _SecX on _Sec {
   String get title => switch (this) {
         _Sec.shop => 'ร้านค้า',
         _Sec.payment => 'การรับชำระ',
         _Sec.receipt => 'ใบเสร็จและเครื่องพิมพ์',
+        _Sec.display => 'จอลูกค้า (จอที่สอง)',
         _Sec.ops => 'การทำงาน',
         _Sec.server => 'เซิร์ฟเวอร์ Thai Prompt',
         _Sec.update => 'อัปเดตแอป',
@@ -48,6 +69,7 @@ extension _SecX on _Sec {
         _Sec.shop => 'branch',
         _Sec.payment => 'promptpay',
         _Sec.receipt => 'printer',
+        _Sec.display => 'display',
         _Sec.ops => 'shift',
         _Sec.server => 'sync',
         _Sec.update => 'settings',
@@ -104,6 +126,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _baseUrl = TextEditingController();
   final _productKey = TextEditingController();
   final _apiKey = TextEditingController();
+  final _host = TextEditingController();
+  final _port = TextEditingController(text: '9100');
   final _scroll = ScrollController();
 
   final _shopForm = GlobalKey<FormState>();
@@ -121,6 +145,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _kitchen = true;
   bool _sound = true;
 
+  // ── receipt printer hardware (draft until "บันทึก") ──
+  String _mode = 'system'; // system | windows | network | bluetooth
+  String _btMac = '';
+  String _btName = '';
+  bool _autoCut = true;
+  bool _drawerOnCash = true;
+  List<({String name, String mac})> _btDevices = <({String name, String mac})>[];
+  bool _btLoading = false;
+  bool _btLoadedOnce = false;
+  String? _btError;
+  bool _testingConn = false;
+  bool _testingDrawer = false;
+
   List<String> _printers = <String>[];
   bool _loadingPrinters = false;
   bool _testing = false;
@@ -129,14 +166,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _syncing = false;
   bool _loaded = false;
 
-  // ── app version + updater (kept from the previous settings screen) ──
+  // ── app version + update check result ──
   String _version = '…';
   String _build = '…';
-  String _status = 'ยังไม่ได้ตรวจสอบ';
-  bool _checking = false;
-  bool _installing = false;
-  double? _progress;
-  UpdateInfo? _info;
+  String? _checkMsg;
 
   @override
   void initState() {
@@ -168,6 +201,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _resetOps(s);
     _baseUrl.text = s.serverBaseUrl;
     _productKey.text = s.productKey;
+    if (_mode == 'bluetooth' && PrinterConfig.bluetoothSupported) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadBt();
+      });
+    }
   }
 
   void _resetShop(PosStore s) {
@@ -190,6 +228,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _paper = s.paperWidthMm == 58 ? 58 : 80;
     _printer = s.printerName;
     _autoPrint = s.autoPrintReceipt;
+    _mode = s.printerMode;
+    _autoCut = s.printerAutoCut;
+    _drawerOnCash = s.drawerOnCash;
+    final hp = s.printerMode == 'network' ? parseHostPort(s.printerAddress) : null;
+    _host.text = hp?.host ?? '';
+    _port.text = '${hp?.port ?? 9100}';
+    _btMac = s.printerMode == 'bluetooth' ? s.printerAddress : '';
+    _btName = s.printerMode == 'bluetooth' ? s.printerDeviceName : '';
   }
 
   void _resetOps(PosStore s) {
@@ -200,7 +246,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    for (final c in [_shop, _branch, _phone, _address, _taxId, _promptPay, _vatRate, _footer, _baseUrl, _productKey, _apiKey]) {
+    for (final c in [_shop, _branch, _phone, _address, _taxId, _promptPay, _vatRate, _footer, _baseUrl, _productKey, _apiKey, _host, _port]) {
       c.dispose();
     }
     _scroll.dispose();
@@ -223,7 +269,85 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _parseRate(_vatRate.text) != _rateHundredths(s.vatRate);
 
   bool _receiptDirty(PosStore s) =>
-      _footer.text.trim() != s.receiptFooter || _paper != s.paperWidthMm || _printer != s.printerName || _autoPrint != s.autoPrintReceipt;
+      _footer.text.trim() != s.receiptFooter ||
+      _paper != s.paperWidthMm ||
+      _printer != s.printerName ||
+      _autoPrint != s.autoPrintReceipt ||
+      _mode != s.printerMode ||
+      _addressDirty(s) ||
+      _draftDeviceName(s) != s.printerDeviceName ||
+      _autoCut != s.printerAutoCut ||
+      _drawerOnCash != s.drawerOnCash;
+
+  // ── printer draft (what the form would save) ──
+
+  int? get _portValue => int.tryParse(_port.text.trim());
+
+  String get _netAddress {
+    final h = _host.text.trim();
+    if (h.isEmpty) return '';
+    final p = _portValue ?? 9100;
+    return h.contains(':') ? '[$h]:$p' : '$h:$p';
+  }
+
+  /// network → host:port · bluetooth → MAC · other modes keep the saved value.
+  String _draftAddress(PosStore s) => switch (_mode) {
+        'network' => _netAddress,
+        'bluetooth' => _btMac,
+        _ => s.printerAddress,
+      };
+
+  String _draftDeviceName(PosStore s) => switch (_mode) {
+        'windows' => _printer,
+        'bluetooth' => _btName,
+        'network' => '',
+        _ => s.printerDeviceName,
+      };
+
+  bool _addressDirty(PosStore s) {
+    if (_mode == 'network') {
+      final cur = parseHostPort(s.printerAddress);
+      return cur == null || cur.host != _host.text.trim() || cur.port != _portValue;
+    }
+    return _draftAddress(s) != s.printerAddress;
+  }
+
+  PrinterConfig _draft(PosStore s) => PrinterConfig(
+        mode: _mode,
+        address: _draftAddress(s),
+        deviceName: _draftDeviceName(s),
+        queue: _mode == 'windows' ? _printer : '',
+        paperWidthMm: _paper,
+        autoCut: _autoCut,
+      );
+
+  bool get _modeSupported => switch (_mode) {
+        'windows' => PrinterConfig.windowsRawSupported,
+        'bluetooth' => PrinterConfig.bluetoothSupported,
+        _ => true,
+      };
+
+  /// ESC/POS mode chosen and usable on this device.
+  bool get _escMode => _escModes.contains(_mode) && _modeSupported;
+
+  /// Thai reason the printer choice can't be used yet (null = OK).
+  String? _printerSetupError() {
+    switch (_mode) {
+      case 'windows':
+        if (!PrinterConfig.windowsRawSupported) return 'เครื่องพิมพ์ USB แบบนี้ใช้ได้เฉพาะบน Windows — เลือกชนิดอื่น';
+        if (_printer.isEmpty) return 'เลือกเครื่องพิมพ์ USB จากรายการก่อน';
+      case 'network':
+        final hostErr = _hostError(_host.text);
+        if (hostErr != null) return hostErr;
+        final p = _portValue;
+        if (p == null || p < 1 || p > 65535) return 'พอร์ตต้องอยู่ระหว่าง 1–65535';
+        if (parseHostPort(_netAddress) == null) return 'IP หรือชื่อเครื่องพิมพ์ไม่ถูกต้อง';
+      case 'bluetooth':
+        if (!PrinterConfig.bluetoothSupported) return 'เครื่องพิมพ์บลูทูธใช้ได้บน Android และ iOS — เลือกชนิดอื่น';
+        if (_btMac.isEmpty) return 'เลือกเครื่องพิมพ์บลูทูธจากรายการก่อน';
+    }
+    return null;
+  }
 
   bool _opsDirty(PosStore s) => _requireShift != s.requireShift || _kitchen != s.kitchenEnabled || _sound != s.soundEnabled;
 
@@ -261,9 +385,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _saveReceipt() {
     if (!(_receiptForm.currentState?.validate() ?? false)) return;
-    AppScope.read(context).updateSettings(footer: _footer.text, paperWidth: _paper, printer: _printer, autoPrint: _autoPrint);
+    final err = _printerSetupError();
+    if (err != null) {
+      nvToast(context, err, kind: NvToastKind.warning);
+      return;
+    }
+    final store = AppScope.read(context);
+    store.updateSettings(
+      footer: _footer.text,
+      paperWidth: _paper,
+      printer: _printer,
+      autoPrint: _autoPrint,
+      printMode: _mode,
+      printAddress: _draftAddress(store),
+      printDeviceName: _draftDeviceName(store),
+      autoCut: _autoCut,
+      drawerAfterCash: _drawerOnCash,
+    );
     setState(() {});
-    nvToast(context, 'บันทึกการตั้งค่าใบเสร็จแล้ว', kind: NvToastKind.success);
+    nvToast(context, 'บันทึกการตั้งค่าใบเสร็จและเครื่องพิมพ์แล้ว', kind: NvToastKind.success);
   }
 
   void _saveOps() {
@@ -292,6 +432,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _testPrint() async {
     if (_testing) return;
     final store = AppScope.read(context);
+    final setupError = _printerSetupError();
+    if (setupError != null) {
+      nvToast(context, setupError, kind: NvToastKind.warning);
+      return;
+    }
+    final hw = _draft(store);
     final sample = Order(
       id: 'TEST',
       createdAt: DateTime.now(),
@@ -328,12 +474,91 @@ class _SettingsScreenState extends State<SettingsScreen> {
         medium: rollMedium(_paper),
         printerName: _printer,
         precache: ReceiptDoc.precache,
+        hardware: hw, // the unsaved choice in this form (system → driver path)
       );
       if (!mounted) return;
       nvToast(context, res.message, kind: res.ok ? NvToastKind.success : NvToastKind.warning);
     } finally {
       if (mounted) setState(() => _testing = false);
     }
+  }
+
+  /// Validate the draft for an ESC/POS test; toasts and returns null when not ready.
+  PrinterConfig? _escDraftOrToast() {
+    final err = _escMode ? _printerSetupError() : 'เลือกชนิดเครื่องพิมพ์ USB / LAN / บลูทูธ ก่อนทดสอบ';
+    if (err != null) {
+      nvToast(context, err, kind: NvToastKind.warning);
+      return null;
+    }
+    return _draft(AppScope.read(context));
+  }
+
+  Future<void> _testConnection() async {
+    if (_testingConn) return;
+    final cfg = _escDraftOrToast();
+    if (cfg == null) return;
+    setState(() => _testingConn = true);
+    try {
+      await PrinterHub.instance.testConnection(config: cfg);
+      if (!mounted) return;
+      nvToast(context, 'เชื่อมต่อ ${cfg.label} สำเร็จ', kind: NvToastKind.success);
+    } on PrinterException catch (e) {
+      if (mounted) nvToast(context, e.message, kind: NvToastKind.error);
+    } catch (e) {
+      if (mounted) nvToast(context, 'เชื่อมต่อไม่สำเร็จ: $e', kind: NvToastKind.error);
+    } finally {
+      if (mounted) setState(() => _testingConn = false);
+    }
+  }
+
+  Future<void> _testDrawer() async {
+    if (_testingDrawer) return;
+    final cfg = _escDraftOrToast();
+    if (cfg == null) return;
+    setState(() => _testingDrawer = true);
+    try {
+      await PrinterHub.instance.openDrawer(config: cfg);
+      if (!mounted) return;
+      final store = AppScope.read(context);
+      store.log('drawer.open', 'ทดสอบเปิดลิ้นชักจากหน้าตั้งค่า (${cfg.label})');
+      store.flush().ignore();
+      nvToast(context, 'ส่งคำสั่งเปิดลิ้นชักไปที่ ${cfg.label} แล้ว', kind: NvToastKind.success);
+    } on PrinterException catch (e) {
+      if (mounted) nvToast(context, e.message, kind: NvToastKind.error);
+    } catch (e) {
+      if (mounted) nvToast(context, 'เปิดลิ้นชักไม่สำเร็จ: $e', kind: NvToastKind.error);
+    } finally {
+      if (mounted) setState(() => _testingDrawer = false);
+    }
+  }
+
+  Future<void> _loadBt() async {
+    if (_btLoading || !PrinterConfig.bluetoothSupported) return;
+    setState(() {
+      _btLoading = true;
+      _btError = null;
+    });
+    try {
+      final list = await PrinterHub.instance.pairedBluetooth();
+      if (!mounted) return;
+      setState(() {
+        _btDevices = list;
+        _btLoadedOnce = true;
+      });
+    } on PrinterException catch (e) {
+      if (mounted) setState(() => _btError = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _btError = 'อ่านรายการบลูทูธไม่ได้: $e');
+    } finally {
+      if (mounted) setState(() => _btLoading = false);
+    }
+  }
+
+  void _setMode(String m) {
+    if (m == _mode) return;
+    setState(() => _mode = m);
+    if (m == 'bluetooth' && PrinterConfig.bluetoothSupported && !_btLoadedOnce) _loadBt();
+    if (m == 'windows' && _printers.isEmpty && !_loadingPrinters) _loadPrinters();
   }
 
   // ───────────────────────── server pairing (original flow) ─────────────────────────
@@ -421,82 +646,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
     nvToast(context, 'คัดลอก Device ID แล้ว', kind: NvToastKind.success);
   }
 
-  // ───────────────────────── updater (original logic) ─────────────────────────
-
-  bool get _canSelfInstall => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
-
-  String get _platform {
-    if (kIsWeb) return 'Web';
-    return switch (defaultTargetPlatform) {
-      TargetPlatform.android => 'Android',
-      TargetPlatform.iOS => 'iOS',
-      TargetPlatform.windows => 'Windows',
-      TargetPlatform.macOS => 'macOS',
-      TargetPlatform.linux => 'Linux',
-      TargetPlatform.fuchsia => 'Fuchsia',
-    };
-  }
+  // ───────────────────────── updater (UpdateWatcher) ─────────────────────────
 
   Future<void> _check() async {
-    setState(() {
-      _checking = true;
-      _status = 'กำลังตรวจสอบ GitHub Releases…';
-    });
-    final info = await AutoUpdater(owner: _repoOwner, repo: _repoName).checkForUpdate();
+    final w = UpdateWatcher.instance;
+    if (w.checking || w.installing) return;
+    setState(() => _checkMsg = null);
+    final info = await w.check();
     if (!mounted) return;
     setState(() {
-      _checking = false;
-      _info = info;
       if (info == null) {
-        _status = 'ตรวจสอบไม่ได้ — ตรวจอินเทอร์เน็ต หรือยังไม่มีไฟล์ติดตั้งในรุ่นล่าสุด';
-      } else if (info.hasUpdate) {
-        _status = 'มีอัปเดต: v${info.currentVersion} → v${info.latestVersion}';
-      } else {
-        _status = 'ใช้เวอร์ชันล่าสุดแล้ว (v${info.currentVersion})';
+        _checkMsg = 'ตรวจสอบไม่ได้ — ตรวจอินเทอร์เน็ต หรือยังไม่มีไฟล์ติดตั้งในรุ่นล่าสุด';
+      } else if (!info.hasUpdate) {
+        _checkMsg = 'ใช้เวอร์ชันล่าสุดแล้ว (v${info.currentVersion})';
       }
     });
   }
 
-  Future<void> _install() async {
-    final info = _info;
-    if (info == null || !info.hasUpdate || _installing) return;
-    final ok = await showNvConfirm(
-      context,
-      title: 'ติดตั้ง v${info.latestVersion}?',
-      message: 'ดาวน์โหลดและติดตั้งทับเวอร์ชันเดิม — ข้อมูลร้านในเครื่องยังอยู่ครบ แอปจะเปิดใหม่หลังติดตั้ง',
-      confirmLabel: 'ดาวน์โหลดและติดตั้ง',
-      danger: false,
-      art: 'settings',
-    );
-    if (!ok || !mounted) return;
-    setState(() {
-      _installing = true;
-      _progress = 0;
-      _status = 'กำลังเริ่มดาวน์โหลด…';
-    });
-    await AutoUpdater(owner: _repoOwner, repo: _repoName).downloadAndInstall(
-      info,
-      onProgress: (pct, status) {
-        if (mounted) {
-          setState(() {
-            _progress = (pct / 100).clamp(0.0, 1.0);
-            _status = status;
-          });
-        }
-      },
-      onError: (e) {
-        if (mounted) {
-          setState(() {
-            _installing = false;
-            _progress = null;
-            _status = 'ผิดพลาด: $e';
-          });
-        }
-      },
-      onComplete: () {
-        if (mounted) setState(() => _installing = false);
-      },
-    );
+  void _setAutoUpdate(bool v) {
+    AppScope.read(context).updateSettings(autoUpdates: v);
+    nvToast(context, v ? 'เปิดอัปเดตอัตโนมัติแล้ว' : 'ปิดอัปเดตอัตโนมัติแล้ว', kind: NvToastKind.success);
   }
 
   // ───────────────────────── build ─────────────────────────
@@ -524,11 +693,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _section(_Sec.shop, 'ชื่อร้าน สาขา และข้อมูลบนหัวใบเสร็จ', dirty[_Sec.shop]!, _shopBody(), onSave: _saveShop, onReset: () => setState(() => _resetShop(store))),
         _section(_Sec.payment, 'พร้อมเพย์และภาษีมูลค่าเพิ่ม', dirty[_Sec.payment]!, _paymentBody(store),
             onSave: _savePayment, onReset: () => setState(() => _resetPayment(store))),
-        _section(_Sec.receipt, 'ท้ายใบเสร็จ ขนาดกระดาษ และเครื่องพิมพ์', dirty[_Sec.receipt]!, _receiptBody(store),
+        _section(_Sec.receipt, 'ท้ายใบเสร็จ ขนาดกระดาษ เครื่องพิมพ์ และลิ้นชักเงินสด', dirty[_Sec.receipt]!, _receiptBody(store),
             onSave: _saveReceipt, onReset: () => setState(() => _resetReceipt(store))),
+        _section(_Sec.display, 'แสดงรายการ ยอดชำระ QR และคำขอบคุณ บนจอที่หันหาลูกค้า', false, const SecondScreenSettingsCard(framed: false)),
         _section(_Sec.ops, 'กะการขาย ครัว และเสียง', dirty[_Sec.ops]!, _opsBody(), onSave: _saveOps, onReset: () => setState(() => _resetOps(store))),
         _section(_Sec.server, 'จับคู่เครื่องเพื่อส่งบิลและดึงสินค้าจากร้านออนไลน์', dirty[_Sec.server]!, _serverBody(store)),
-        _section(_Sec.update, 'ตรวจและติดตั้งเวอร์ชันใหม่', false, _updateBody()),
+        _section(_Sec.update, 'ตรวจและติดตั้งเวอร์ชันใหม่', false, _updateBody(store)),
         _section(_Sec.about, 'เวอร์ชันและผู้พัฒนา', false, _aboutBody()),
       ],
     );
@@ -841,14 +1011,212 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ── ใบเสร็จและเครื่องพิมพ์ ──
-  Widget _receiptBody(PosStore store) {
+  Widget _caption(String text) => Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 6),
+        child: Text(text, style: Nv.ui(12.5, color: Nv.ink2, weight: FontWeight.w600)),
+      );
+
+  Widget _hint(String text, {Color? color}) => Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(text, style: Nv.ui(12, color: color ?? Nv.ink3, height: 1.4)),
+      );
+
+  List<(String, String, IconData)> get _modeOptions => [
+        ('system', 'ระบบ (ไดรเวอร์/หน้าต่างพิมพ์)', NvIcons.print),
+        if (PrinterConfig.windowsRawSupported || _mode == 'windows') ('windows', 'USB บน Windows', NvIcons.link),
+        ('network', 'LAN / Wi-Fi', NvIcons.wifi),
+        if (PrinterConfig.bluetoothSupported || _mode == 'bluetooth') ('bluetooth', 'บลูทูธ', NvIcons.signal),
+      ];
+
+  String get _modeHint {
+    final text = switch (_mode) {
+      'windows' => 'ส่งคำสั่ง ESC/POS ตรงเข้าคิวเครื่องพิมพ์ของ Windows (เครื่องพิมพ์ USB) — ภาษาไทยคมชัด ตัดกระดาษและเปิดลิ้นชักได้ '
+          '· ต้องติดตั้งไดรเวอร์ของเครื่องพิมพ์ หรือ "Generic / Text Only" บนพอร์ต USB ก่อน',
+      'network' => 'เครื่องพิมพ์ที่ต่อสาย LAN หรือ Wi-Fi (ESC/POS พอร์ต 9100) — ควรตั้ง IP ของเครื่องพิมพ์ให้คงที่',
+      'bluetooth' => 'เครื่องพิมพ์บลูทูธที่จับคู่ (pair) กับเครื่องนี้แล้ว รวมถึงเครื่องพิมพ์ในตัวของ Sunmi',
+      _ => 'พิมพ์เป็น PDF ผ่านไดรเวอร์ของระบบ — ใช้ได้กับทุกเครื่องพิมพ์ แต่การตัดกระดาษ/เปิดลิ้นชักขึ้นกับไดรเวอร์',
+    };
+    return _modeSupported ? text : '$text · เครื่องนี้ไม่รองรับชนิดนี้ กรุณาเลือกชนิดอื่น';
+  }
+
+  Widget _queueDropdown() {
+    final windows = _mode == 'windows';
     final options = <String>['', ..._printers];
     if (_printer.isNotEmpty && !options.contains(_printer)) options.add(_printer);
     String label(String p) {
-      if (p.isEmpty) return 'ถามทุกครั้ง (หน้าต่างพิมพ์ของระบบ)';
+      if (p.isEmpty) return windows ? 'เลือกเครื่องพิมพ์…' : 'ถามทุกครั้ง (หน้าต่างพิมพ์ของระบบ)';
       return _printers.contains(p) ? p : '$p (ไม่พบในเครื่องตอนนี้)';
     }
 
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 440),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _caption(windows ? 'เครื่องพิมพ์ USB (คิวเครื่องพิมพ์ของ Windows)' : 'เครื่องพิมพ์ใบเสร็จ'),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: Nv.paper,
+                    borderRadius: BorderRadius.circular(Nv.rSm),
+                    border: Border.all(color: windows && _printer.isEmpty ? Nv.amber : Nv.line),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: _printer,
+                      isExpanded: true,
+                      icon: const Icon(NvIcons.chevronDown, size: 12, color: Nv.ink3),
+                      borderRadius: BorderRadius.circular(Nv.rSm),
+                      dropdownColor: Nv.ivory2,
+                      style: Nv.ui(14, color: Nv.ink),
+                      items: [
+                        for (final p in options)
+                          DropdownMenuItem(value: p, child: Text(label(p), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                      ],
+                      onChanged: (v) => setState(() => _printer = v ?? ''),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              _loadingPrinters
+                  ? const SizedBox(width: 42, height: 42, child: Padding(padding: EdgeInsets.all(11), child: CircularProgressIndicator(strokeWidth: 2)))
+                  : NvIconButton(NvIcons.sync, tooltip: 'ค้นหาเครื่องพิมพ์อีกครั้ง', onPressed: _loadPrinters),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _networkFields() {
+    final host = NvField(
+      label: 'IP หรือชื่อเครื่องพิมพ์ *',
+      controller: _host,
+      icon: NvIcons.wifi,
+      hint: 'เช่น 192.168.1.100',
+      keyboard: TextInputType.url,
+      onChanged: _touch,
+      validator: (v) => _mode == 'network' ? _hostError(v ?? '') : null,
+    );
+    final port = NvField(
+      label: 'พอร์ต',
+      controller: _port,
+      icon: NvIcons.link,
+      keyboard: TextInputType.number,
+      formatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(5)],
+      onChanged: _touch,
+      validator: (v) {
+        if (_mode != 'network') return null;
+        final p = int.tryParse((v ?? '').trim());
+        return p == null || p < 1 || p > 65535 ? '1–65535' : null;
+      },
+    );
+    return LayoutBuilder(builder: (context, c) {
+      if (c.maxWidth < 460) return Column(children: [host, const SizedBox(height: 12), port]);
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [Expanded(child: host), const SizedBox(width: 12), SizedBox(width: 150, child: port)],
+      );
+    });
+  }
+
+  Widget _bluetoothPanel() {
+    if (!PrinterConfig.bluetoothSupported) {
+      return _hint('เครื่องนี้ไม่รองรับเครื่องพิมพ์บลูทูธ (ใช้ได้บน Android และ iOS) — เลือกชนิดอื่น', color: Nv.lacquer);
+    }
+    final known = {for (final d in _btDevices) d.mac.toUpperCase()};
+    final devices = <({String name, String mac})>[
+      if (_btMac.isNotEmpty && !known.contains(_btMac.toUpperCase())) (name: _btName.isEmpty ? _btMac : _btName, mac: _btMac),
+      ..._btDevices,
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(child: _caption('เครื่องพิมพ์บลูทูธที่จับคู่ไว้')),
+            _btLoading
+                ? const SizedBox(width: 42, height: 42, child: Padding(padding: EdgeInsets.all(11), child: CircularProgressIndicator(strokeWidth: 2)))
+                : NvIconButton(NvIcons.sync, tooltip: 'ค้นหาอุปกรณ์บลูทูธอีกครั้ง', onPressed: _loadBt),
+          ],
+        ),
+        if (_btError != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Nv.amberTint,
+              borderRadius: BorderRadius.circular(Nv.rSm),
+              border: Border.all(color: Nv.amber.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(NvIcons.warning, size: 14, color: Nv.amber),
+                const SizedBox(width: 8),
+                Expanded(child: Text(_btError!, style: Nv.ui(12.5, color: Nv.ink, height: 1.4))),
+              ],
+            ),
+          ),
+        if (devices.isEmpty && !_btLoading && _btError == null)
+          Text(
+            _btLoadedOnce
+                ? 'ไม่พบอุปกรณ์ที่จับคู่ไว้ — จับคู่เครื่องพิมพ์ในการตั้งค่าบลูทูธของเครื่องก่อน แล้วกดค้นหาอีกครั้ง'
+                : 'กดปุ่มค้นหาเพื่อแสดงรายการเครื่องพิมพ์บลูทูธ',
+            style: Nv.ui(12.5, color: Nv.ink3),
+          ),
+        for (final d in devices)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: _btTile(d, missing: !known.contains(d.mac.toUpperCase())),
+          ),
+        _hint('เครื่อง Sunmi: เลือก "${BluetoothPrinter.sunmiInnerPrinterName}" (${BluetoothPrinter.sunmiInnerPrinterMac}) '
+            '= เครื่องพิมพ์ในตัว · iOS แสดงเครื่องที่อยู่ใกล้ (ค้นหาประมาณ 5 วินาที)'),
+      ],
+    );
+  }
+
+  Widget _btTile(({String name, String mac}) d, {required bool missing}) {
+    final selected = d.mac.toUpperCase() == _btMac.toUpperCase();
+    final sunmi = d.mac.toUpperCase() == BluetoothPrinter.sunmiInnerPrinterMac || d.name == BluetoothPrinter.sunmiInnerPrinterName;
+    return NvSheet(
+      selected: selected,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      onTap: () => setState(() {
+        _btMac = d.mac;
+        _btName = d.name;
+      }),
+      child: Row(
+        children: [
+          Icon(sunmi ? NvIcons.print : NvIcons.signal, size: 16, color: selected ? Nv.goldInk : Nv.ink3),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Nv.ui(14, weight: FontWeight.w600)),
+                Text(missing ? '${d.mac} · ไม่พบในรายการตอนนี้' : d.mac,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Nv.money(11.5, color: missing ? Nv.amber : Nv.ink3, weight: FontWeight.w500)),
+              ],
+            ),
+          ),
+          if (sunmi) ...[const SizedBox(width: 8), const NvBadge('เครื่องพิมพ์ในตัว Sunmi', tint: NvTint.sapphire)],
+          if (selected) ...[const SizedBox(width: 8), const Icon(NvIcons.checkCircle, size: 16, color: Nv.jade)],
+        ],
+      ),
+    );
+  }
+
+  Widget _receiptBody(PosStore store) {
+    final esc = _escMode;
     return Form(
       key: _receiptForm,
       child: Column(
@@ -863,19 +1231,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
             validator: (v) => (v ?? '').trim().length > 120 ? 'ยาวเกิน 120 ตัวอักษร' : null,
           ),
           const SizedBox(height: 14),
+          _caption('ชนิดเครื่องพิมพ์'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final (value, text, icon) in _modeOptions)
+                NvChip(text, icon: icon, selected: _mode == value, onTap: () => _setMode(value)),
+            ],
+          ),
+          _hint(_modeHint, color: _modeSupported ? null : Nv.lacquer),
+          const SizedBox(height: 14),
           Wrap(
             spacing: 16,
             runSpacing: 12,
-            crossAxisAlignment: WrapCrossAlignment.center,
+            crossAxisAlignment: WrapCrossAlignment.end,
             children: [
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 6),
-                    child: Text('ขนาดกระดาษ', style: Nv.ui(12.5, color: Nv.ink2, weight: FontWeight.w600)),
-                  ),
+                  _caption('ขนาดกระดาษ'),
                   NvSegmented<int>(
                     options: const [(58, '58 มม.'), (80, '80 มม.')],
                     value: _paper,
@@ -883,68 +1259,48 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ],
               ),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.only(left: 4, bottom: 6),
-                      child: Text('เครื่องพิมพ์ใบเสร็จ', style: Nv.ui(12.5, color: Nv.ink2, weight: FontWeight.w600)),
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14),
-                            decoration: BoxDecoration(color: Nv.paper, borderRadius: BorderRadius.circular(Nv.rSm), border: Border.all(color: Nv.line)),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<String>(
-                                value: _printer,
-                                isExpanded: true,
-                                icon: const Icon(NvIcons.chevronDown, size: 12, color: Nv.ink3),
-                                borderRadius: BorderRadius.circular(Nv.rSm),
-                                dropdownColor: Nv.ivory2,
-                                style: Nv.ui(14, color: Nv.ink),
-                                items: [
-                                  for (final p in options)
-                                    DropdownMenuItem(value: p, child: Text(label(p), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                                ],
-                                onChanged: (v) => setState(() => _printer = v ?? ''),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        _loadingPrinters
-                            ? const SizedBox(width: 42, height: 42, child: Padding(padding: EdgeInsets.all(11), child: CircularProgressIndicator(strokeWidth: 2)))
-                            : NvIconButton(NvIcons.sync, tooltip: 'ค้นหาเครื่องพิมพ์อีกครั้ง', onPressed: _loadPrinters),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              if (_mode == 'system' || (_mode == 'windows' && PrinterConfig.windowsRawSupported)) _queueDropdown(),
             ],
           ),
-          if (!_loadingPrinters && _printers.isEmpty) ...[
-            const SizedBox(height: 8),
-            Text('ระบบนี้ไม่ส่งรายชื่อเครื่องพิมพ์มาให้ — จะเปิดหน้าต่างพิมพ์ของระบบทุกครั้ง', style: Nv.ui(12, color: Nv.ink3)),
-          ],
+          if (_mode == 'system' && !_loadingPrinters && _printers.isEmpty)
+            _hint('ระบบนี้ไม่ส่งรายชื่อเครื่องพิมพ์มาให้ — จะเปิดหน้าต่างพิมพ์ของระบบทุกครั้ง'),
+          if (_mode == 'windows' && PrinterConfig.windowsRawSupported && !_loadingPrinters && _printers.isEmpty)
+            _hint('ไม่พบเครื่องพิมพ์ใน Windows — ติดตั้งไดรเวอร์ของเครื่องพิมพ์ (หรือ Generic / Text Only บนพอร์ต USB) แล้วกดค้นหาอีกครั้ง',
+                color: Nv.amber),
+          if (_mode == 'network') ...[const SizedBox(height: 14), _networkFields()],
+          if (_mode == 'bluetooth') ...[const SizedBox(height: 14), _bluetoothPanel()],
           const SizedBox(height: 8),
           _switchRow('พิมพ์ใบเสร็จอัตโนมัติหลังชำระเงิน', 'ส่งไปที่เครื่องพิมพ์ที่เลือกทันทีโดยไม่ต้องกดพิมพ์', _autoPrint,
               (v) => setState(() => _autoPrint = v)),
+          _switchRow(
+            'ตัดกระดาษอัตโนมัติ',
+            esc ? 'ตัดกระดาษหลังพิมพ์ทุกใบ (เครื่องพิมพ์ที่มีมีดตัด)' : 'ใช้ได้เมื่อเลือก USB / LAN / บลูทูธ — แบบระบบให้ตั้งในไดรเวอร์',
+            _autoCut,
+            esc ? (v) => setState(() => _autoCut = v) : null,
+          ),
+          _switchRow(
+            'เปิดลิ้นชักหลังรับเงินสด',
+            esc
+                ? 'ส่งสัญญาณเปิดลิ้นชักที่ต่อกับเครื่องพิมพ์ (สาย RJ11/RJ12) ทุกครั้งที่รับชำระด้วยเงินสด'
+                : 'ใช้ได้เมื่อเลือก USB / LAN / บลูทูธ (ลิ้นชักต่อกับเครื่องพิมพ์ใบเสร็จ)',
+            _drawerOnCash,
+            esc ? (v) => setState(() => _drawerOnCash = v) : null,
+          ),
           const SizedBox(height: 8),
-          Row(
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
             children: [
               NvButton.navy('พิมพ์ทดสอบ', icon: NvIcons.print, size: NvButtonSize.sm, loading: _testing, onPressed: _testPrint),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text('ใช้ขนาดกระดาษและเครื่องพิมพ์ที่เลือกด้านบน (ยังไม่ต้องบันทึก) · พิมพ์เป็นใบทดสอบ ไม่ใช่ใบเสร็จ',
-                    style: Nv.ui(12, color: Nv.ink3, height: 1.4)),
-              ),
+              if (_escModes.contains(_mode)) ...[
+                NvButton.soft('ทดสอบการเชื่อมต่อ',
+                    icon: NvIcons.link, size: NvButtonSize.sm, loading: _testingConn, onPressed: esc && !_testingConn ? _testConnection : null),
+                NvButton.soft('ทดสอบเปิดลิ้นชัก',
+                    icon: NvIcons.drawer, size: NvButtonSize.sm, loading: _testingDrawer, onPressed: esc && !_testingDrawer ? _testDrawer : null),
+              ],
             ],
           ),
+          _hint('ทดสอบด้วยค่าที่เลือกด้านบน (ยังไม่ต้องบันทึก) · พิมพ์เป็นใบทดสอบ ไม่ใช่ใบเสร็จ'),
         ],
       ),
     );
@@ -1084,79 +1440,130 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ── อัปเดตแอป ──
-  Widget _updateBody() {
-    final info = _info;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(color: Nv.paper, borderRadius: BorderRadius.circular(14), border: Border.all(color: Nv.line)),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
+  Widget _updateBody(PosStore store) {
+    final w = UpdateWatcher.instance;
+    return ListenableBuilder(
+      listenable: w,
+      builder: (context, _) {
+        final info = w.available;
+        final canInstall = AutoUpdater.canSelfInstall;
+        final String status;
+        if (w.checking) {
+          status = 'กำลังตรวจสอบเวอร์ชันใหม่…';
+        } else if (w.installing) {
+          status = w.status.isEmpty ? 'กำลังติดตั้งเวอร์ชันใหม่…' : _safeUpdateText(w.status);
+        } else if (info != null) {
+          status = 'มีอัปเดต: v${info.currentVersion} → v${info.latestVersion}';
+        } else {
+          status = _checkMsg ?? (w.lastCheck != null ? 'ใช้เวอร์ชันล่าสุดแล้ว (v$_version)' : 'ยังไม่ได้ตรวจสอบ');
+        }
+        final notes = info == null ? '' : cleanReleaseNotes(info.releaseNotes);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(color: Nv.paper, borderRadius: BorderRadius.circular(14), border: Border.all(color: Nv.line)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(info?.hasUpdate == true ? NvIcons.download : NvIcons.info, size: 15, color: info?.hasUpdate == true ? Nv.goldInk : Nv.ink3),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(_status, style: Nv.ui(13.5, color: Nv.ink, weight: FontWeight.w600))),
+                  Row(
+                    children: [
+                      Icon(info != null ? NvIcons.download : NvIcons.info, size: 15, color: info != null ? Nv.goldInk : Nv.ink3),
+                      const SizedBox(width: 10),
+                      Expanded(child: Text(status, style: Nv.ui(13.5, color: Nv.ink, weight: FontWeight.w600))),
+                    ],
+                  ),
+                  if (w.installing || w.progress > 0) ...[
+                    const SizedBox(height: 10),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: LinearProgressIndicator(value: w.progress > 0 ? (w.progress / 100).clamp(0.0, 1.0) : null, minHeight: 7),
+                    ),
+                  ],
+                  if (w.error != null) ...[
+                    const SizedBox(height: 8),
+                    Text(_safeUpdateText(w.error!), style: Nv.ui(12.5, color: Nv.lacquer, weight: FontWeight.w600)),
+                  ],
+                  if (info != null) ...[
+                    const SizedBox(height: 10),
+                    NvKeyValue('เผยแพร่เมื่อ', thaiDate(info.publishedAt), mono: false),
+                    if (info.sizeBytes > 0) NvKeyValue('ขนาดไฟล์', '${(info.sizeBytes / 1048576).toStringAsFixed(1)} MB'),
+                    if (notes.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 150),
+                        child: SingleChildScrollView(child: Text(notes, style: Nv.ui(12.5, color: Nv.ink2, height: 1.45))),
+                      ),
+                    ],
+                  ],
+                  if (w.lastCheck != null) ...[
+                    const SizedBox(height: 6),
+                    Text('ตรวจล่าสุด ${thaiDateTime(w.lastCheck!)}', style: Nv.ui(11.5, color: Nv.ink4)),
+                  ],
                 ],
               ),
-              if (_progress != null) ...[
-                const SizedBox(height: 10),
-                ClipRRect(borderRadius: BorderRadius.circular(6), child: LinearProgressIndicator(value: _progress, minHeight: 7)),
-              ],
-              if (info != null && info.hasUpdate) ...[
-                const SizedBox(height: 10),
-                NvKeyValue('เผยแพร่เมื่อ', thaiDate(info.publishedAt), mono: false),
-                if (info.sizeBytes > 0) NvKeyValue('ขนาดไฟล์', '${(info.sizeBytes / 1048576).toStringAsFixed(1)} MB'),
-                if (info.releaseNotes.trim().isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 150),
-                    child: SingleChildScrollView(
-                      child: Text(info.releaseNotes.trim(), style: Nv.ui(12.5, color: Nv.ink2, height: 1.45)),
-                    ),
-                  ),
-                ],
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (info != null && info.hasUpdate && !_canSelfInstall)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: Text(
-              'การติดตั้งอัตโนมัติรองรับเฉพาะ Android — บน $_platform ดาวน์โหลดตัวติดตั้งเวอร์ชันใหม่ได้ที่ github.com/$_repoOwner/$_repoName/releases',
-              style: Nv.ui(12.5, color: Nv.ink2, height: 1.45),
             ),
-          ),
-        Wrap(
-          alignment: WrapAlignment.end,
-          spacing: 10,
-          runSpacing: 10,
-          children: [
-            NvButton.soft(_checking ? 'กำลังตรวจสอบ…' : 'ตรวจสอบอัปเดต',
-                icon: NvIcons.sync, size: NvButtonSize.sm, loading: _checking, onPressed: _checking || _installing ? null : _check),
-            if (info != null && info.hasUpdate && _canSelfInstall)
-              NvButton.gold('ดาวน์โหลดและติดตั้ง v${info.latestVersion}',
-                  icon: NvIcons.download, size: NvButtonSize.sm, loading: _installing, onPressed: _installing ? null : _install),
+            const SizedBox(height: 8),
+            _switchRow(
+              'อัปเดตอัตโนมัติเมื่อเครื่องว่าง',
+              canInstall
+                  ? 'ติดตั้งเวอร์ชันใหม่เองที่หน้าเข้าสู่ระบบเมื่อไม่มีการขายค้างอยู่ (ยกเลิกได้ระหว่างนับถอยหลัง)'
+                  : 'ติดตั้งเองได้บน Android และ Windows',
+              store.autoUpdate,
+              canInstall ? _setAutoUpdate : null,
+            ),
+            if (!canInstall)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text('ติดตั้งเวอร์ชันใหม่ผ่านร้านค้าแอปหรือติดต่อ xman studio (xman4289.com)',
+                    style: Nv.ui(12.5, color: Nv.ink2, height: 1.45)),
+              )
+            else if (info != null && !info.hasInstaller)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text('รุ่นนี้ยังไม่มีไฟล์ติดตั้งสำหรับ ${AutoUpdater.platformLabel} — ติดต่อ xman studio (xman4289.com)',
+                    style: Nv.ui(12.5, color: Nv.ink2, height: 1.45)),
+              ),
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                NvButton.soft(w.checking ? 'กำลังตรวจสอบ…' : 'ตรวจสอบอัปเดต',
+                    icon: NvIcons.sync, size: NvButtonSize.sm, loading: w.checking, onPressed: w.checking || w.installing ? null : _check),
+                if (info != null && canInstall && info.hasInstaller)
+                  NvButton.gold('ดาวน์โหลดและติดตั้ง v${info.latestVersion}',
+                      icon: NvIcons.download,
+                      size: NvButtonSize.sm,
+                      loading: w.installing,
+                      onPressed: w.installing ? null : () => showUpdateDialog(context, requireManager: false)),
+              ],
+            ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 
   // ── เกี่ยวกับ ──
   Widget _aboutBody() {
-    Widget link(String text) => Row(
+    Widget link(String url, {String? label}) => Row(
           children: [
             const Icon(NvIcons.link, size: 12, color: Nv.goldInk),
             const SizedBox(width: 8),
-            Expanded(child: SelectableText(text, style: Nv.money(12.5, color: Nv.sapphire, weight: FontWeight.w500))),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (label != null) Text(label, style: Nv.ui(12.5, color: Nv.ink2, weight: FontWeight.w600)),
+                  SelectableText(url, style: Nv.money(12.5, color: Nv.sapphire, weight: FontWeight.w500)),
+                ],
+              ),
+            ),
             NvIconButton(NvIcons.copy, size: 32, tooltip: 'คัดลอก', onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: text));
+              await Clipboard.setData(ClipboardData(text: url));
               if (!mounted) return;
               nvToast(context, 'คัดลอกลิงก์แล้ว', kind: NvToastKind.success);
             }),
@@ -1174,7 +1581,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('Thai Prompt POS', style: Nv.ui(16, weight: FontWeight.w700)),
-                  Text('v$_version (build $_build) · $_platform', style: Nv.money(12.5, color: Nv.ink3, weight: FontWeight.w500)),
+                  Text('v$_version (build $_build) · ${AutoUpdater.platformLabel}',
+                      style: Nv.money(12.5, color: Nv.ink3, weight: FontWeight.w500)),
                 ],
               ),
             ),
@@ -1183,8 +1591,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 12),
         Text('ระบบขายหน้าร้านของ Thai Prompt · ทำงานออฟไลน์ได้เต็มรูปแบบ · สร้างโดย xman studio', style: Nv.ui(13, color: Nv.ink2)),
         const SizedBox(height: 8),
-        link('https://thaiprompt.online'),
-        link('https://github.com/$_repoOwner/$_repoName'),
+        link('https://thaiprompt.online', label: 'Thai Prompt'),
+        const SizedBox(height: 4),
+        link('https://xman4289.com', label: 'xman studio'),
       ],
     );
   }

@@ -38,10 +38,32 @@ class CrmScreen extends StatefulWidget {
 }
 
 class _CrmScreenState extends State<CrmScreen> {
+  final TextEditingController _search = TextEditingController();
   String _query = '';
   String? _tierId;
   String? _selectedId;
   _Sort _sort = _Sort.recent;
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  /// Camera scan (member phone / member QR) → the text goes into the search
+  /// box; a single match is selected for the detail panel.
+  void _onCameraScan(String raw) {
+    if (!mounted) return;
+    final code = raw.trim();
+    if (code.isEmpty) return;
+    _search.text = code;
+    final hits = AppScope.read(context).searchCustomers(code);
+    setState(() {
+      _query = code;
+      _tierId = null;
+      if (hits.length == 1) _selectedId = hits.first.id;
+    });
+  }
 
   Future<void> _add() async {
     final input = await _openCustomerForm(context);
@@ -201,10 +223,25 @@ class _CrmScreenState extends State<CrmScreen> {
   }
 
   Widget _toolbar(double w) {
-    final search = NvSearchField(
+    final field = NvSearchField(
       hint: 'ค้นหาชื่อ เบอร์โทร หรืออีเมล',
+      controller: _search,
       onChanged: (v) => setState(() => _query = v),
     );
+    final search = nvCameraScanSupported
+        ? Row(
+            children: [
+              Expanded(child: field),
+              const SizedBox(width: 8),
+              NvScanButton(
+                icon: NvIcons.qrcode,
+                title: 'สแกนบัตร / QR สมาชิก',
+                hint: 'สแกน QR หรือบาร์โค้ดบัตรสมาชิก · ระบบจะนำข้อความไปค้นหาให้',
+                onScanned: _onCameraScan,
+              ),
+            ],
+          )
+        : field;
     final sort = NvSegmented<_Sort>(
       options: const [(_Sort.recent, 'ล่าสุด'), (_Sort.spent, 'ยอดซื้อ'), (_Sort.points, 'แต้ม')],
       value: _sort,

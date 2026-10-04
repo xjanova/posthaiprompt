@@ -11,8 +11,10 @@ class ApiException implements Exception {
   final String message;
   final int? statusCode;
   final Map<String, dynamic>? errors; // Laravel 422 field errors
+  final String? code; // machine code from the server envelope, e.g. ITEMS_NOT_IN_STORE
+  final Object? data; // envelope `data` on an error (e.g. the missing items)
 
-  ApiException(this.message, {this.statusCode, this.errors});
+  ApiException(this.message, {this.statusCode, this.errors, this.code, this.data});
 
   /// True when the failure is "no usable connection to the server" — the signal
   /// the app uses to switch to offline mode rather than surfacing a hard error.
@@ -30,7 +32,7 @@ class UnauthorizedException extends ApiException {
 /// 409 — last-write-wins conflict; body carries the server's latest version.
 class ConflictException extends ApiException {
   final Map<String, dynamic>? latest;
-  ConflictException(super.message, {this.latest}) : super(statusCode: 409);
+  ConflictException(super.message, {this.latest, super.code, super.data}) : super(statusCode: 409);
 }
 
 /// Transport-level failure (no response): timeout, DNS, connection refused,

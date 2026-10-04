@@ -7,15 +7,23 @@
 // seeing the money arrive. Card: done on the EDC terminal, the 6-character
 // approval code is required. Wallet: optional reference. Confirm →
 // store.checkout (shift / role guarded) → optional auto-print → /receipt.
+// "ส่งด้วยไรเดอร์ Thai Prompt": the customer pays goods + delivery in the
+// Thai Prompt app instead (tp_rider_dialog.dart) — the bill is booked when
+// the payment lands, then the receipt opens.
+// Cash sales kick the cash drawer when an ESC/POS receipt printer is set up
+// (inside the receipt job when auto-print is on).
 // Also prints a quotation (ใบเสนอราคา) of the current cart.
 //
 // by xman studio
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../core/hardware/printer_hub.dart';
 import '../core/payments/promptpay.dart';
 import '../core/print/print_service.dart';
 import '../models/extra_models.dart';
@@ -26,6 +34,7 @@ import '../print/receipt_doc.dart' show ShopInfo;
 import '../state/app_scope.dart';
 import '../state/pos_store.dart';
 import '../widgets/nova/nova.dart';
+import 'tp_rider_dialog.dart';
 
 const _methods = [PaymentMethod.cash, PaymentMethod.promptpay, PaymentMethod.card, PaymentMethod.wallet];
 
@@ -158,7 +167,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
         PaymentMethod.cash => total <= 0 || (_cash.isNotEmpty && _tendered >= total),
         PaymentMethod.promptpay => total > 0 && _promptReady(store),
         PaymentMethod.card => total > 0 && _approval.text.trim().length == 6,
-        PaymentMethod.wallet => total > 0,
+        // thaiprompt is never a tile here — it is booked by the rider flow (_tpRider).
+        PaymentMethod.wallet || PaymentMethod.thaiprompt => total > 0,
       };
 
   Future<void> _confirm() async {
@@ -203,7 +213,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
           return;
         }
         ref = 'EDC $code';
-      case PaymentMethod.wallet:
+      case PaymentMethod.wallet || PaymentMethod.thaiprompt:
         final r = _ref.text.trim();
         ref = r.isEmpty ? null : r;
     }
@@ -216,11 +226,62 @@ class _PaymentScreenState extends State<PaymentScreen> {
       return;
     }
     setState(() => _paid = order);
+    // Cash sale + ESC/POS printer → open the drawer. With auto-print the kick
+    // rides in the receipt job (one connection); otherwise it is sent alone.
+    final kick = order.method == PaymentMethod.cash && store.drawerOnCash && PrinterHub.instance.usesEscPos;
+    // The root navigator outlives this page, so a late drawer error can still toast.
+    final rootNav = Navigator.of(context, rootNavigator: true);
     if (store.autoPrintReceipt) {
-      await printReceipt(context, order, quiet: true);
+      final printed = await printReceipt(context, order, quiet: true, kickDrawer: kick);
+      if (kick && !printed) _kickDrawer(rootNav); // the print job (and its kick) failed
       if (!mounted) return;
+    } else if (kick) {
+      _kickDrawer(rootNav);
     }
+    if (!mounted) return;
     context.go('/receipt?id=${order.id}');
+  }
+
+  /// Customer pays goods + delivery in the Thai Prompt app; a rider collects.
+  Future<void> _tpRider() async {
+    if (_busy) return;
+    final store = AppScope.read(context);
+    if (_isShiftBlock(store)) {
+      nvToast(context, store.checkoutBlockReason, kind: NvToastKind.warning);
+      final opened = await _offerOpenShift(context);
+      if (!opened || !mounted) return;
+    }
+    final block = tpRiderBlockReason(store);
+    if (block.isNotEmpty) {
+      nvToast(context, block, kind: NvToastKind.warning);
+      return;
+    }
+    final res = await showTpRiderDialog(context);
+    if (!mounted || res == null) return;
+    switch (res.outcome) {
+      case TpRiderOutcome.paid:
+        final order = store.orderById(res.job?.orderId ?? '');
+        if (order == null) return;
+        setState(() => _paid = order);
+        if (store.autoPrintReceipt) {
+          await printReceipt(context, order, quiet: true);
+          if (!mounted) return;
+        }
+        context.go('/receipt?id=${order.id}');
+      case TpRiderOutcome.parked:
+        context.go('/cashier');
+      case TpRiderOutcome.closed:
+        break;
+    }
+  }
+
+  /// Fire-and-forget drawer kick; failures toast via the root navigator.
+  void _kickDrawer(NavigatorState rootNav) {
+    unawaited(PrinterHub.instance.openDrawer().catchError((Object e) {
+      if (rootNav.mounted) {
+        nvToast(rootNav.context, 'เปิดลิ้นชักเงินสดไม่สำเร็จ: ${e is PrinterException ? e.message : e}', kind: NvToastKind.error);
+      }
+    }));
   }
 
   Future<void> _printQuote() async {
@@ -330,7 +391,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
         PaymentMethod.cash => _cashPanel(total),
         PaymentMethod.promptpay => _promptPanel(store, total),
         PaymentMethod.card => _cardPanel(total),
-        PaymentMethod.wallet => _walletPanel(total),
+        PaymentMethod.wallet || PaymentMethod.thaiprompt => _walletPanel(total),
       },
     );
     return Column(
@@ -353,6 +414,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
             ],
           ],
         ),
+        if (total > 0) ...[const SizedBox(height: 10), _TpRiderEntry(onTap: _busy ? null : _tpRider)],
         const SizedBox(height: 12),
         if (fill) Expanded(child: SingleChildScrollView(child: panel)) else panel,
         const SizedBox(height: 12),
@@ -395,7 +457,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   : 'รับเงิน ${baht(_tendered)} · ทอน ${baht(_tendered - total)}',
       PaymentMethod.promptpay => 'ได้รับเงินแล้ว ${baht(total)}',
       PaymentMethod.card => _approval.text.trim().length == 6 ? 'ยืนยันชำระด้วยบัตร ${baht(total)}' : 'กรอกรหัสอนุมัติก่อนยืนยัน',
-      PaymentMethod.wallet => 'ยืนยันรับชำระ ${baht(total)}',
+      PaymentMethod.wallet || PaymentMethod.thaiprompt => 'ยืนยันรับชำระ ${baht(total)}',
     };
     return NvButton.gold(
       label,
@@ -956,6 +1018,40 @@ class _PaidState extends StatelessWidget {
             NvButton.gold('ดูใบเสร็จ', icon: NvIcons.receipt, onPressed: () => context.go('/receipt?id=${order.id}')),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "ส่งด้วยไรเดอร์ Thai Prompt" — the customer pays in the Thai Prompt app.
+class _TpRiderEntry extends StatelessWidget {
+  final VoidCallback? onTap;
+  const _TpRiderEntry({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return NvSheet(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      radius: Nv.rMd,
+      onTap: onTap,
+      child: Row(
+        children: [
+          NvArt.icon('delivery', size: 36),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('ส่งด้วยไรเดอร์ Thai Prompt', style: Nv.ui(14.5, weight: FontWeight.w700)),
+                Text('ลูกค้าสแกน QR จ่ายค่าสินค้า + ค่าส่งในแอป Thai Prompt',
+                    maxLines: 2, overflow: TextOverflow.ellipsis, style: Nv.ui(12, color: Nv.ink3)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 6),
+          const Icon(NvIcons.angleRight, size: 13, color: Nv.ink4),
+        ],
       ),
     );
   }

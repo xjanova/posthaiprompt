@@ -172,6 +172,9 @@ class Product {
   final bool available; // false = hidden from sale (86'd)
   final bool trackStock;
   final List<OptionGroup> options;
+  /// The product's id in the shop's online catalog (`/api/pos/sync/products`
+  /// `id`) — lets Thai Prompt rider requests point at the exact server row.
+  final int? serverId;
   int stock;
 
   Product({
@@ -191,6 +194,7 @@ class Product {
     this.available = true,
     this.trackStock = true,
     this.options = const [],
+    this.serverId,
     this.stock = 999,
   });
 
@@ -235,6 +239,7 @@ class Product {
         available: available ?? this.available,
         trackStock: trackStock ?? this.trackStock,
         options: options ?? this.options,
+        serverId: serverId,
         stock: stock ?? this.stock,
       );
 
@@ -255,6 +260,7 @@ class Product {
         'available': available,
         'trackStock': trackStock,
         'options': options.map((o) => o.toJson()).toList(),
+        if (serverId != null) 'serverId': serverId,
         'stock': stock,
       };
 
@@ -277,6 +283,7 @@ class Product {
         options: ((j['options'] as List?) ?? const [])
             .map((e) => OptionGroup.fromJson((e as Map).cast<String, dynamic>()))
             .toList(),
+        serverId: (j['serverId'] as num?)?.toInt(),
         stock: (j['stock'] as num?)?.toInt() ?? 999,
       );
 }

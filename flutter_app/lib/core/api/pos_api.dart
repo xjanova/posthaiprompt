@@ -45,6 +45,23 @@ class PosApi {
   Future<Map<String, dynamic>> verify(Map<String, dynamic> body) async =>
       (await client.post(ApiPaths.verify, data: body) as Map).cast<String, dynamic>();
 
+  // ── Thai Prompt rider delivery ──
+  // The server prices the items from the shop's online catalog and returns a
+  // QR (`TPPOS1.<token>`); the customer pays goods + delivery in the Thai
+  // Prompt app. Response maps are the envelope `data`.
+
+  /// `{local_id, order_local_id?, items:[{product_id?, sku, qty, name}], customer_phone?, note?}`
+  Future<Map<String, dynamic>> createDeliveryRequest(Map<String, dynamic> body) async =>
+      _map(await client.post(ApiPaths.deliveryRequests, data: body, retries: 0));
+
+  Future<Map<String, dynamic>> deliveryRequest(int id) async =>
+      _map(await client.get('${ApiPaths.deliveryRequests}/$id', retries: 0));
+
+  Future<Map<String, dynamic>> cancelDeliveryRequest(int id) async =>
+      _map(await client.post('${ApiPaths.deliveryRequests}/$id/cancel', retries: 0));
+
+  static Map<String, dynamic> _map(Object? data) => data is Map ? data.cast<String, dynamic>() : <String, dynamic>{};
+
   Future<List<dynamic>> _postList(String path) async {
     final data = await client.post(path);
     if (data is List) return data;

@@ -178,10 +178,12 @@ class _ReceiptScreenState extends State<ReceiptScreen> {
       _ActionTile(
         art: 'refund',
         title: 'คืนเงิน',
-        subtitle: order.status == OrderStatus.refunded
-            ? 'บิลนี้คืนเงินครบแล้ว'
-            : (order.refundAmount > 0 ? 'คืนไปแล้ว ${baht(order.refundAmount)} · คืนเพิ่มได้' : 'คืนทั้งบิลหรือบางรายการ (ต้องอนุมัติ)'),
-        onTap: order.status == OrderStatus.paid ? () => context.go('/refund?id=${order.id}') : null,
+        subtitle: order.method == PaymentMethod.thaiprompt
+            ? 'จ่ายผ่าน Thai Prompt — ลูกค้าแจ้งปัญหาในแอปเพื่อขอคืนเงิน'
+            : order.status == OrderStatus.refunded
+                ? 'บิลนี้คืนเงินครบแล้ว'
+                : (order.refundAmount > 0 ? 'คืนไปแล้ว ${baht(order.refundAmount)} · คืนเพิ่มได้' : 'คืนทั้งบิลหรือบางรายการ (ต้องอนุมัติ)'),
+        onTap: order.status == OrderStatus.paid && order.method != PaymentMethod.thaiprompt ? () => context.go('/refund?id=${order.id}') : null,
       ),
       if (order.type == OrderType.delivery && job == null)
         _ActionTile(

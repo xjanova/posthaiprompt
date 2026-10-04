@@ -6,7 +6,11 @@
 // fee, COD, age. Actions: advance status, edit (dialog → updateDelivery),
 // print the shipping label (/shipping/labels?id=), copy tracking no. / link,
 // cancel (confirm). "สร้างงานจัดส่ง" picks a paid order that has no job yet →
-// form → createDelivery. No partner API: status and tracking are kept by staff.
+// form → createDelivery. Manual providers: status and tracking are kept by staff.
+// Thai Prompt rider jobs (started on the payment screen — the customer pays in
+// the Thai Prompt app) update themselves from the server (RiderTracker): the
+// card shows the live payment / rider state, re-opens the QR while unpaid and
+// cancels through the server; staff can't advance or edit them by hand.
 //
 // by xman studio
 
@@ -16,10 +20,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/api/api_exceptions.dart';
 import '../models/extra_models.dart';
 import '../models/order_models.dart';
+import '../services/rider_tracker.dart';
 import '../state/app_scope.dart';
 import '../widgets/nova/nova.dart';
+import 'tp_rider_dialog.dart';
 
 const _board = [DeliveryStatus.pending, DeliveryStatus.picking, DeliveryStatus.delivering, DeliveryStatus.delivered];
 
@@ -75,6 +82,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
         j.orderId.toLowerCase().contains(q) ||
         j.customerName.toLowerCase().contains(q) ||
         j.trackingNo.toLowerCase().contains(q) ||
+        j.remoteOrderNo.toLowerCase().contains(q) ||
         (digits.length >= 3 && j.phone.replaceAll(RegExp(r'\D'), '').contains(digits));
   }
 
@@ -90,9 +98,11 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
     return NvScaffold(
       title: 'งานจัดส่ง',
       eyebrow: 'DELIVERY',
-      subtitle: 'ติดตามงานส่งของ — สถานะและเลขพัสดุบันทึกโดยพนักงาน (ยังไม่เชื่อม API ผู้ให้บริการ)',
+      subtitle: 'ไรเดอร์ Thai Prompt อัปเดตสถานะเอง · ผู้ให้บริการอื่นบันทึกสถานะและเลขพัสดุโดยพนักงาน',
       art: 'delivery',
       actions: [
+        if (store.tpActiveJobs.isNotEmpty)
+          NvIconButton(NvIcons.sync, tooltip: 'อัปเดตสถานะไรเดอร์ Thai Prompt', onPressed: () => RiderTracker.instance.pollAll()),
         if (!compact) NvButton.ghost('ใบปะหน้า', icon: NvIcons.print, onPressed: () => context.go('/shipping/labels')),
         if (!compact && store.isManager)
           NvButton.ghost('ผู้ให้บริการ', icon: NvIcons.shipping, onPressed: () => context.go('/shipping/providers')),
@@ -260,6 +270,7 @@ class _JobCard extends StatelessWidget {
     final provider = store.providerById(j.providerId);
     final order = store.orderById(j.orderId);
     final open = j.status != DeliveryStatus.delivered && j.status != DeliveryStatus.cancelled;
+    final tp = j.isTpRider;
     final trackingUrl = (provider?.trackingUrl.isNotEmpty ?? false) && j.trackingNo.isNotEmpty
         ? provider!.trackingUrl.replaceAll('{no}', Uri.encodeComponent(j.trackingNo))
         : null;
@@ -299,22 +310,27 @@ class _JobCard extends StatelessWidget {
             spacing: 6,
             runSpacing: 4,
             children: [
-              NvBadge('บิล ${j.orderId}', tint: NvTint.neutral, icon: NvIcons.receipt),
-              NvBadge(provider?.name ?? j.providerId, tint: NvTint.sapphire, icon: NvIcons.delivery),
-              if (j.cod) NvBadge('COD ${order == null ? '' : baht(order.netTotal)}'.trim(), tint: NvTint.amber, icon: NvIcons.handDollar),
+              if (j.orderId.isNotEmpty) NvBadge('บิล ${j.orderId}', tint: NvTint.neutral, icon: NvIcons.receipt),
+              NvBadge(provider?.name ?? store.providerLabel(j.providerId), tint: NvTint.sapphire, icon: NvIcons.delivery),
+              if (j.cod && !tp) NvBadge('COD ${order == null ? '' : baht(order.netTotal)}'.trim(), tint: NvTint.amber, icon: NvIcons.handDollar),
             ],
           ),
+          if (tp) ...[
+            const SizedBox(height: 6),
+            Text(j.tpStatusLabel,
+                style: Nv.ui(13, weight: FontWeight.w700, color: j.status == DeliveryStatus.cancelled ? Nv.ink3 : Nv.goldInk)),
+          ],
           const SizedBox(height: 8),
-          Text(j.customerName.isEmpty ? 'ไม่ระบุชื่อผู้รับ' : j.customerName,
+          Text(j.customerName.isNotEmpty ? j.customerName : (tp ? 'ลูกค้าแอป Thai Prompt' : 'ไม่ระบุชื่อผู้รับ'),
               maxLines: 1, overflow: TextOverflow.ellipsis, style: Nv.ui(15, weight: FontWeight.w700, color: j.customerName.isEmpty ? Nv.ink3 : Nv.ink)),
           if (j.phone.isNotEmpty) line(NvIcons.phone, Text(phoneFmt(j.phone), style: Nv.money(13, color: Nv.ink2, weight: FontWeight.w500))),
           line(
             NvIcons.location,
-            Text(j.address.isEmpty ? 'ยังไม่ระบุที่อยู่' : j.address,
+            Text(j.address.isNotEmpty ? j.address : (tp ? 'ลูกค้าเลือกที่อยู่ที่ปักหมุดในแอป' : 'ยังไม่ระบุที่อยู่'),
                 maxLines: dense ? 2 : 3,
                 overflow: TextOverflow.ellipsis,
-                style: Nv.ui(12.5, color: j.address.isEmpty ? Nv.lacquer : Nv.ink2, height: 1.35)),
-            iconColor: j.address.isEmpty ? Nv.lacquer : Nv.goldInk,
+                style: Nv.ui(12.5, color: j.address.isNotEmpty ? Nv.ink2 : (tp ? Nv.ink3 : Nv.lacquer), height: 1.35)),
+            iconColor: j.address.isEmpty && !tp ? Nv.lacquer : Nv.goldInk,
           ),
           if (j.trackingNo.isNotEmpty)
             line(
@@ -340,41 +356,144 @@ class _JobCard extends StatelessWidget {
                 ],
               ),
             ),
-          if (j.riderName.isNotEmpty) line(NvIcons.personWalking, Text('ผู้ส่ง: ${j.riderName}', style: Nv.ui(12.5, color: Nv.ink2))),
+          if (j.riderName.isNotEmpty)
+            line(
+              NvIcons.personWalking,
+              Text(
+                [
+                  'ผู้ส่ง: ${j.riderName}',
+                  if (j.riderPlate.isNotEmpty) j.riderPlate,
+                  if (j.riderPhone.isNotEmpty) j.riderPhone,
+                ].join(' · '),
+                style: Nv.ui(12.5, color: Nv.ink2),
+              ),
+            ),
           line(
             NvIcons.moneyBill,
-            Text('ค่าส่ง ${baht(j.fee)} · ${(j.weightGrams / 1000).toStringAsFixed(2)} กก.', style: Nv.ui(12.5, color: Nv.ink2)),
+            Text(
+              tp
+                  ? 'ค่าสินค้า ${baht(j.subtotal)}${j.fee > 0 ? ' · ค่าส่ง ${baht(j.fee)}' : ''} · ลูกค้าจ่ายในแอป'
+                  : 'ค่าส่ง ${baht(j.fee)} · ${(j.weightGrams / 1000).toStringAsFixed(2)} กก.',
+              style: Nv.ui(12.5, color: Nv.ink2),
+            ),
           ),
           if (j.note.isNotEmpty) line(NvIcons.note, Text(j.note, maxLines: 2, overflow: TextOverflow.ellipsis, style: Nv.ui(12, color: Nv.ink3))),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              if (open)
-                Expanded(
-                  child: NvButton.gold(
-                    _advanceLabel(j.status),
-                    icon: NvIcons.arrowRight,
-                    size: NvButtonSize.sm,
-                    expand: true,
-                    tooltip: 'เปลี่ยนเป็น "${j.status.next.label}"',
-                    onPressed: () => _advance(context, j),
-                  ),
-                )
-              else
-                const Spacer(),
-              const SizedBox(width: 6),
-              NvIconButton(NvIcons.edit, size: 34, tooltip: 'แก้ไข', onPressed: j.status == DeliveryStatus.cancelled ? null : () => _editJob(context, j)),
-              const SizedBox(width: 4),
-              NvIconButton(NvIcons.print, size: 34, tooltip: 'พิมพ์ใบปะหน้า',
-                  onPressed: j.status == DeliveryStatus.cancelled ? null : () => context.go('/shipping/labels?id=${j.id}')),
-              if (open) ...[
+          if (tp)
+            _TpActions(job: j)
+          else
+            Row(
+              children: [
+                if (open)
+                  Expanded(
+                    child: NvButton.gold(
+                      _advanceLabel(j.status),
+                      icon: NvIcons.arrowRight,
+                      size: NvButtonSize.sm,
+                      expand: true,
+                      tooltip: 'เปลี่ยนเป็น "${j.status.next.label}"',
+                      onPressed: () => _advance(context, j),
+                    ),
+                  )
+                else
+                  const Spacer(),
+                const SizedBox(width: 6),
+                NvIconButton(NvIcons.edit, size: 34, tooltip: 'แก้ไข', onPressed: j.status == DeliveryStatus.cancelled ? null : () => _editJob(context, j)),
                 const SizedBox(width: 4),
-                NvIconButton(NvIcons.xCircle, size: 34, tooltip: 'ยกเลิกงาน', color: Nv.lacquer, onPressed: () => _cancelJob(context, j)),
+                NvIconButton(NvIcons.print, size: 34, tooltip: 'พิมพ์ใบปะหน้า',
+                    onPressed: j.status == DeliveryStatus.cancelled ? null : () => context.go('/shipping/labels?id=${j.id}')),
+                if (open) ...[
+                  const SizedBox(width: 4),
+                  NvIconButton(NvIcons.xCircle, size: 34, tooltip: 'ยกเลิกงาน', color: Nv.lacquer, onPressed: () => _cancelJob(context, j)),
+                ],
               ],
-            ],
-          ),
+            ),
         ],
       ),
+    );
+  }
+}
+
+// ───────────────────────────── Thai Prompt rider actions ─────────────────────────────
+
+class _TpActions extends StatefulWidget {
+  final DeliveryJob job;
+  const _TpActions({required this.job});
+
+  @override
+  State<_TpActions> createState() => _TpActionsState();
+}
+
+class _TpActionsState extends State<_TpActions> {
+  bool _busy = false;
+
+  Future<void> _refresh() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    final ok = await RiderTracker.instance.refresh(widget.job);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (!ok) nvToast(context, 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — จะลองใหม่อัตโนมัติ', kind: NvToastKind.warning);
+  }
+
+  Future<void> _cancel() async {
+    final j = widget.job;
+    final store = AppScope.read(context);
+    final api = store.sync?.api;
+    if (_busy || api == null || j.requestId == null) return;
+    final ok = await showNvConfirm(
+      context,
+      title: 'ยกเลิกคำขอ ${j.id}?',
+      message: 'QR ของคำขอนี้จะใช้จ่ายไม่ได้อีก',
+      confirmLabel: 'ยกเลิกคำขอ',
+      cancelLabel: 'ไม่ยกเลิก',
+    );
+    if (!ok || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final data = await api.cancelDeliveryRequest(j.requestId!);
+      if (data.isNotEmpty) store.applyTpRiderStatus(j, data);
+      if (j.payStatus != 'paid') store.markTpRiderClosed(j);
+      if (mounted) nvToast(context, 'ยกเลิกคำขอ ${j.id} แล้ว', kind: NvToastKind.success);
+    } on ApiException catch (e) {
+      await RiderTracker.instance.refresh(j);
+      if (mounted && j.payStatus == 'pending') {
+        nvToast(context, e.isOffline ? 'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้' : e.message, kind: NvToastKind.error);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final j = widget.job;
+    final closed = j.status == DeliveryStatus.cancelled;
+    return Row(
+      children: [
+        if (j.awaitingPayment)
+          Expanded(
+            child: NvButton.gold('แสดง QR ให้ลูกค้า', icon: NvIcons.qrcode, size: NvButtonSize.sm, expand: true,
+                onPressed: _busy ? null : () => showTpRiderDialog(context, resume: j)),
+          )
+        else if (j.orderId.isNotEmpty)
+          Expanded(
+            child: NvButton.ghost('ดูบิล ${j.orderId}', icon: NvIcons.receipt, size: NvButtonSize.sm, expand: true,
+                onPressed: () => context.go('/receipt?id=${j.orderId}')),
+          )
+        else
+          const Spacer(),
+        const SizedBox(width: 6),
+        if (j.tpActive) NvIconButton(NvIcons.sync, size: 34, tooltip: 'อัปเดตสถานะ', onPressed: _busy ? null : _refresh),
+        if (!closed && j.orderId.isNotEmpty) ...[
+          const SizedBox(width: 4),
+          NvIconButton(NvIcons.print, size: 34, tooltip: 'พิมพ์ใบปะหน้า', onPressed: () => context.go('/shipping/labels?id=${j.id}')),
+        ],
+        if (j.awaitingPayment) ...[
+          const SizedBox(width: 4),
+          NvIconButton(NvIcons.xCircle, size: 34, tooltip: 'ยกเลิกคำขอ', color: Nv.lacquer, onPressed: _busy ? null : _cancel),
+        ],
+      ],
     );
   }
 }
@@ -383,6 +502,7 @@ class _JobCard extends StatelessWidget {
 
 Future<void> _advance(BuildContext context, DeliveryJob j) async {
   final store = AppScope.read(context);
+  if (j.isTpRider) return; // driven by the server
   if (j.status.next == DeliveryStatus.delivered && j.cod) {
     final order = store.orderById(j.orderId);
     final ok = await showNvConfirm(
@@ -522,6 +642,11 @@ class _OrderPickerState extends State<_OrderPicker> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Text('ส่งด้วยไรเดอร์ Thai Prompt? เลือกได้ที่หน้าชำระเงิน — ลูกค้าจ่ายค่าสินค้าและค่าส่งในแอป',
+              style: Nv.ui(12.5, color: Nv.ink3)),
+        ),
         NvSearchField(hint: 'ค้นหาเลขบิลหรือชื่อลูกค้า', autofocus: true, onChanged: (v) => setState(() => _q = v)),
         const SizedBox(height: 10),
         if (list.isEmpty)

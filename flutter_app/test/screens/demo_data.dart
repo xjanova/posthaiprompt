@@ -145,6 +145,34 @@ PosStore buildDemoStore() {
   final job = s.createDelivery(paid, customerName: 'คุณนภา', phone: '0817778888', address: '88/9 ซ.สุขุมวิท 31 วัฒนา กทม. 10110', providerId: 'lineman', cod: false);
   s.updateDelivery(job, trackingNo: 'LM2610040012', riderName: 'พี่โอ๊ต');
   s.advanceDelivery(job);
+  // Thai Prompt rider: one waiting for the customer to pay in the app, one on the road
+  TpRiderLine line(int i, int qty) => TpRiderLine(code: s.products[i].code, name: s.products[i].name, qty: qty, price: s.products[i].price);
+  final road = s.createTpRiderJob(
+    requestId: 40,
+    qrPayload: 'TPPOS1.demo40',
+    expiresAt: DateTime.now().add(const Duration(minutes: 3)),
+    lines: [line(2, 1), line(7, 2)],
+    subtotal: s.products[2].price + s.products[7].price * 2,
+  );
+  s.applyTpRiderStatus(road, {
+    'status': 'paid',
+    'delivery_fee': 42,
+    'order': {'id': 901, 'order_number': 'ORD-2610-0901'},
+    'customer': {'display_name': 'คุณมาลี ส.', 'address_short': 'คอนโดลุมพินี ทาวเวอร์ ชั้น 12 ห้อง 1205'},
+    'rider_job': {
+      'status': 'delivering',
+      'job_number': 'JOB-26100455',
+      'rider': {'display_name': 'สมชาย ก.', 'plate_masked': '1กข-**34', 'phone_masked': '08x-xxx-4521'},
+    },
+  });
+  s.createTpRiderJob(
+    requestId: 41,
+    qrPayload: 'TPPOS1.k3J9xQ2mVb7LpR4tYw8Zc1Nd6Hf0Gs5Ae9Ku3Jo',
+    expiresAt: DateTime.now().add(const Duration(minutes: 12, seconds: 30)),
+    lines: [line(1, 2), line(5, 1)],
+    subtotal: s.products[1].price * 2 + s.products[5].price,
+    phone: '0891234567',
+  );
   s.updateProvider(s.providerById('lineman')!, enabled: true, baseFee: 35);
   s.updateProvider(s.providerById('flash')!, enabled: true, baseFee: 45);
 

@@ -1,11 +1,13 @@
 // Thaiprompt POS — entry point (Windows · Android · iOS)
 // by xman studio
 
+import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter_acrylic/flutter_acrylic.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
@@ -16,15 +18,41 @@ import 'core/api/pos_api.dart';
 import 'core/auth/auth_repository.dart';
 import 'core/auth/token_storage.dart';
 import 'core/sync/outbox.dart';
+import 'core/hardware/printer_hub.dart';
 import 'core/sync/sync_service.dart';
+import 'display/second_screen_service.dart';
 import 'routes/app_router.dart';
+import 'services/rider_tracker.dart';
+import 'services/update_watcher.dart';
 import 'state/app_scope.dart';
 import 'state/pos_store.dart';
 import 'theme/tp_theme.dart';
 import 'theme/nv_tokens.dart';
 
-Future<void> main() async {
+/// Android dual-display terminals: Dart entrypoint of the customer-facing
+/// Presentation engine (MainActivity.kt starts it by this exact name).
+@pragma('vm:entry-point')
+Future<void> customerDisplayMain() => runCustomerDisplayAndroid();
+
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Windows: the customer-facing second screen is another window/engine
+  // created by desktop_multi_window — it renders snapshots only, no store.
+  if (!kIsWeb && Platform.isWindows) {
+    try {
+      final me = await WindowController.fromCurrentEngine();
+      if (me.arguments.isNotEmpty) {
+        final a = jsonDecode(me.arguments);
+        if (a is Map && a['type'] == 'customer_display') {
+          await runCustomerDisplayWindow(a.cast<String, dynamic>());
+          return;
+        }
+      }
+    } catch (_) {
+      // main window (no arguments) or plugin unavailable → normal POS start
+    }
+  }
 
   // Boot the reactive store from disk before the first frame so persisted
   // sales/stock are present immediately. The seed catalog loads synchronously,
@@ -56,6 +84,13 @@ Future<void> main() async {
   store.sync = sync;
   store.auth = auth;
   sync.start(); // periodic + on-demand; no-ops until the terminal is paired
+
+  // Hardware + services: ESC/POS printer / cash drawer, customer second
+  // screen, background update checks, Thai Prompt rider job tracking.
+  PrinterHub.instance.attach(store);
+  SecondScreenService.instance.attach(store);
+  UpdateWatcher.instance.start();
+  RiderTracker.instance.attach(store);
 
   // Windows: real Mica/Acrylic via Win32 DwmExtendFrameIntoClientArea.
   // On Android/iOS we fall through and use BackdropFilter blur on glass cards.

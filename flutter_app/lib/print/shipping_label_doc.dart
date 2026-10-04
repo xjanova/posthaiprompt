@@ -34,7 +34,9 @@ class ShippingLabelDoc extends StatelessWidget {
   const ShippingLabelDoc({super.key, required this.job, required this.shop, required this.providerName, this.order});
 
   /// Amount the rider collects on delivery (order total less any refund).
-  int get codAmount => job.cod ? (order?.netTotal ?? 0) : 0;
+  // Thai Prompt rider jobs are always prepaid in the app — never COD.
+  bool get _cod => job.cod && !job.isTpRider;
+  int get codAmount => _cod ? (order?.netTotal ?? 0) : 0;
 
   String get barcodeData => job.trackingNo.trim().isNotEmpty ? job.trackingNo.trim() : job.id;
 
@@ -92,12 +94,28 @@ class ShippingLabelDoc extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(providerName, maxLines: 1, overflow: TextOverflow.ellipsis, style: t(32, FontWeight.w800)),
-                            Text('งานจัดส่ง ${job.id} · บิล ${job.orderId}', style: m(16, FontWeight.w500)),
+                            Text(
+                                'งานจัดส่ง ${job.id}${job.orderId.isEmpty ? '' : ' · บิล ${job.orderId}'}'
+                                '${job.remoteOrderNo.isEmpty ? '' : ' · ${job.remoteOrderNo}'}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: m(16, FontWeight.w500)),
                           ],
                         ),
                       ),
                       const SizedBox(width: 10),
-                      if (job.cod)
+                      if (job.isTpRider)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 2.5)),
+                          child: Column(
+                            children: [
+                              Text('ชำระแล้ว', style: t(20, FontWeight.w800)),
+                              Text('ผ่าน Thai Prompt', style: t(13, FontWeight.w700)),
+                            ],
+                          ),
+                        )
+                      else if (_cod)
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           color: Colors.black,
@@ -191,11 +209,12 @@ class ShippingLabelDoc extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (job.cod) kv('ยอดเก็บเงิน', baht(codAmount, decimals: true), big: true),
+                            if (_cod) kv('ยอดเก็บเงิน', baht(codAmount, decimals: true), big: true),
                             kv('จำนวน', order == null ? '—' : '${order!.itemCount} ชิ้น'),
-                            kv('น้ำหนัก', '$kg กก.'),
+                            if (job.weightGrams > 0) kv('น้ำหนัก', '$kg กก.'),
                             kv('วันที่', thaiDateTime(job.createdAt)),
-                            if (job.riderName.isNotEmpty) kv('ผู้ส่งของ', job.riderName),
+                            if (job.riderName.isNotEmpty)
+                              kv('ผู้ส่งของ', [job.riderName, if (job.riderPlate.isNotEmpty) job.riderPlate].join(' · ')),
                             if (job.note.isNotEmpty)
                               Padding(
                                 padding: const EdgeInsets.only(top: 2),

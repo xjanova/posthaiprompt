@@ -173,10 +173,11 @@ class _CashierScreenState extends State<CashierScreen> {
   }
 
   /// Enter in the search box: barcode / SKU first, else a single search match.
-  void _onSubmitted(String raw, List<Product> visible) {
+  /// [refocus] is false for camera scans so phones don't pop the soft keyboard.
+  void _onSubmitted(String raw, List<Product> visible, {bool refocus = true}) {
     final store = AppScope.read(context);
     final code = raw.trim();
-    _searchFocus.requestFocus(); // stay ready for the next scan
+    if (refocus) _searchFocus.requestFocus(); // stay ready for the next scan
     if (code.isEmpty) return;
     final p = store.productByScan(code);
     if (p != null) {
@@ -192,6 +193,20 @@ class _CashierScreenState extends State<CashierScreen> {
     }
     nvToast(context, 'ไม่พบสินค้ารหัส "$code"', kind: NvToastKind.error);
     _search.selection = TextSelection(baseOffset: 0, extentOffset: _search.text.length);
+  }
+
+  /// Camera scan: behaves exactly like a keyboard-wedge scanner typing the
+  /// code into the search box and pressing Enter (same lookup, option dialog,
+  /// sold-out / not-found toasts).
+  void _onCameraScan(String raw) {
+    if (!mounted) return;
+    final code = raw.trim();
+    if (code.isEmpty) return;
+    final store = AppScope.read(context);
+    _search.text = code;
+    store.setSearch(code);
+    final topNames = store.topProducts(limit: 12).map((e) => e.name).toList();
+    _onSubmitted(code, _visible(store, topNames), refocus: false);
   }
 
   // ── filters ──
@@ -274,14 +289,24 @@ class _CashierScreenState extends State<CashierScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        NvSearchField(
-          hint: 'ค้นหาชื่อ / รหัส หรือสแกนบาร์โค้ด  (F2)',
-          controller: _search,
-          focusNode: _searchFocus,
-          autofocus: desktop,
-          icon: NvIcons.barcode,
-          onChanged: (v) => AppScope.read(context).setSearch(v),
-          onSubmitted: (v) => _onSubmitted(v, items),
+        Row(
+          children: [
+            Expanded(
+              child: NvSearchField(
+                hint: 'ค้นหาชื่อ / รหัส หรือสแกนบาร์โค้ด  (F2)',
+                controller: _search,
+                focusNode: _searchFocus,
+                autofocus: desktop,
+                icon: NvIcons.barcode,
+                onChanged: (v) => AppScope.read(context).setSearch(v),
+                onSubmitted: (v) => _onSubmitted(v, items),
+              ),
+            ),
+            if (nvCameraScanSupported) ...[
+              const SizedBox(width: 8),
+              NvScanButton(title: 'สแกนสินค้าเข้าตะกร้า', onScanned: _onCameraScan),
+            ],
+          ],
         ),
         const SizedBox(height: 10),
         SizedBox(height: 40, child: _chips(store, topNames)),

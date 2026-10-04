@@ -74,6 +74,7 @@ IconData _methodIcon(PaymentMethod m) => switch (m) {
       PaymentMethod.card => NvIcons.creditCard,
       PaymentMethod.promptpay => NvIcons.qrcode,
       PaymentMethod.wallet => NvIcons.wallet,
+      PaymentMethod.thaiprompt => NvIcons.delivery,
     };
 
 Widget _statusBadge(Order o) {
@@ -1002,7 +1003,9 @@ class _OrderDetailState extends State<_OrderDetail> {
                 icon: NvIcons.print, loading: _printing, onPressed: _printing ? null : () => _print(o)),
             NvButton.soft('แชร์ PDF', icon: NvIcons.share, loading: _sharing, onPressed: _sharing ? null : () => _share(o)),
             NvButton.ghost('คืนเงิน',
-                icon: NvIcons.refund, onPressed: o.status == OrderStatus.paid ? () => widget.onGo('/refund?id=${o.id}') : null),
+                icon: NvIcons.refund,
+                tooltip: o.method == PaymentMethod.thaiprompt ? 'จ่ายผ่าน Thai Prompt — คืนเงินผ่านแอป Thai Prompt' : null,
+                onPressed: o.status == OrderStatus.paid && o.method != PaymentMethod.thaiprompt ? () => widget.onGo('/refund?id=${o.id}') : null),
             NvButton.navy('ใบกำกับภาษี', icon: NvIcons.tax, onPressed: () => widget.onGo('/tax-invoice?id=${o.id}')),
           ],
         ),

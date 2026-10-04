@@ -266,6 +266,9 @@ class _RefundScreenState extends State<RefundScreen> {
         if (order == null) {
           left = _picker(store);
           right = _history(store);
+        } else if (order.method == PaymentMethod.thaiprompt) {
+          left = _thaiPromptState(order);
+          right = _history(store);
         } else if (order.status != OrderStatus.paid || order.lines.every((l) => l.refundableQty == 0)) {
           left = _doneState(order);
           right = _history(store);
@@ -528,6 +531,38 @@ class _RefundScreenState extends State<RefundScreen> {
       ],
     );
   }
+
+  /// Paid in the Thai Prompt app → refunds go through Thai Prompt, not the till.
+  Widget _thaiPromptState(Order o) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _billHeader(o),
+          const SizedBox(height: 14),
+          NvSheet(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                NvArt.icon('delivery', size: 72),
+                const SizedBox(height: 8),
+                Text('บิลนี้ลูกค้าจ่ายผ่านแอป Thai Prompt', textAlign: TextAlign.center, style: Nv.display(20)),
+                const SizedBox(height: 6),
+                Text(
+                  'เงินอยู่ในระบบ Thai Prompt — ถ้าลูกค้าไม่ได้รับของหรือของมีปัญหา ให้ลูกค้ากด "แจ้งปัญหา" ในแอป '
+                  'แอดมิน Thai Prompt จะคืนเงินเข้ากระเป๋าให้ ห้ามคืนเป็นเงินสดจากลิ้นชัก',
+                  textAlign: TextAlign.center,
+                  style: Nv.ui(13.5, color: Nv.ink3, height: 1.45),
+                ),
+                if (o.paymentRef != null) ...[
+                  const SizedBox(height: 6),
+                  Text('อ้างอิง ${o.paymentRef}', style: Nv.money(13, color: Nv.ink2)),
+                ],
+                const SizedBox(height: 16),
+                NvButton.soft('เลือกบิลอื่น', icon: NvIcons.rightLeft, onPressed: () => setState(() => _pick(null))),
+              ],
+            ),
+          ),
+        ],
+      );
 
   Widget _doneState(Order o) {
     final full = o.status == OrderStatus.refunded;
