@@ -1,5 +1,12 @@
 # Claude Code — Implementation Rules
 
+> **2026-10-04 — THEME CHANGED TO NOVA.** The owner moved the POS to the Nova theme of
+> thaiprompt.online (navy + gold + ivory, Thai kanok, mascot น้องพร้อม, Anuphan/Trirong/JetBrains Mono).
+> The turquoise/coral tokens below are **superseded**: `flutter_app/lib/theme/tp_tokens.dart` now maps
+> every legacy name to Nova values and new code uses `Nv` + `lib/widgets/nova/`. Follow
+> **`docs/NOVA_UI.md`** for colours, widgets, art and wiring rules; use this file and the HTML mockup only
+> as a *layout* reference. Do not "restore" the teal palette.
+
 > **You are implementing the Thaiprompt POS designs in Flutter (Dart).**
 > The bundled HTML/JSX files in this folder are the **canonical visual spec**.
 > Your task is to **recreate them in Flutter widgets** — codebase at

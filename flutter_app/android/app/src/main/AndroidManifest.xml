@@ -20,7 +20,7 @@
     <uses-feature android:name="android.hardware.nfc" android:required="false"/>
 
     <application
-        android:label="Thaiprompt POS"
+        android:label="Thai Prompt POS"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:requestLegacyExternalStorage="true">

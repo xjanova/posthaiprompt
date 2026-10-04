@@ -18,45 +18,61 @@
 | 🟡 | Implemented but pre-handoff (token values may drift — re-check) |
 | ⬜ | Not yet started — scaffold below |
 
+## Device deployment context
+
+Each screen is targeted at a specific **device** in real-world POS deployment.
+Don't change canvas size to "look better at runtime" — the canvas reflects
+where the screen actually runs.
+
+| Device | Canvas | Hardware | Where it runs |
+|---|---|---|---|
+| 🖥️ **POS terminal** | 1440×900 | Windows touchscreen 15-22" + cash drawer + barcode + thermal printer + NFC | At the counter, all day |
+| 🪟 **Secondary screen** | 1280×800 | Android signage or Windows mini-PC | Customer-facing at counter / wall-mount KDS |
+| 📋 **Tablet** | 1024×768 | iPad 10" or Android tablet | Held by waiter walking the floor |
+| 📱 **Phone (staff)** | 390×844 | Android/iOS 6" personal device | In pocket — waiter / manager on the go |
+| 📱 **Phone (customer)** | 390×844 | Customer's own device | Mobile web/PWA scanning QR at table |
+| 🧾 **Thermal printer** | 360×640 | ESC/POS 80mm | Printed, not displayed |
+| 🖥️ **Back-office** | 1440×900 | Desktop/laptop + keyboard+mouse | Owner office, morning/evening |
+
 ## 39-screen manifest
 
-| # | Screen (TH / EN) | Canvas | Flutter route | Flutter file | Status |
-|---|---|---|---|---|---|
-| 01 | Cashier · จอขายหลัก | 1440×900 | `/cashier` | `lib/screens/cashier_screen.dart` | 🟡 |
-| 02 | Payment · ชำระเงิน | 1100×800 | `/payment` | `lib/screens/payment_screen.dart` | 🟡 |
-| 03 | Receipt · ใบเสร็จ | 360×640 | `/receipt` | `lib/screens/receipt_screen.dart` | 🟡 |
-| 04 | Login · PIN | 1280×800 | `/login` | `lib/screens/login_screen.dart` | 🟡 |
-| 05 | Customer Display | 1280×800 | `/display/customer` | `lib/screens/customer_display_screen.dart` | ⬜ |
-| 06 | Kitchen Display (KDS) | 1440×900 | `/display/kitchen` | `lib/screens/kitchen_display_screen.dart` | ⬜ |
-| 07 | Sales Dashboard | 1440×900 | `/dashboard` | `lib/screens/dashboard_screen.dart` | 🟡 |
-| 08 | Inventory · คลังสินค้า | 1440×900 | `/inventory` | `lib/screens/inventory_screen.dart` | ⬜ |
-| 09 | iPad · ผังโต๊ะ Waiter | 1024×768 | `/tablet/floor` | `lib/screens/tablet_waiter_screen.dart` | ⬜ |
-| 10 | Mobile · รับออเดอร์ที่โต๊ะ | 390×844 | `/mobile/order` | `lib/screens/mobile_order_screen.dart` | ⬜ |
-| 11 | Mobile · ผู้จัดการ | 390×844 | `/mobile/manager` | `lib/screens/mobile_manager_screen.dart` | ⬜ |
-| 12 | การจัดการบัญชี | 1440×900 | `/accounting` | `lib/screens/accounting_screen.dart` | ⬜ |
-| 13 | สร้างบิล | 1440×900 | `/bill/create` | `lib/screens/create_bill_screen.dart` | ⬜ |
-| 14 | ใบกำกับภาษี / e-Tax | 1440×900 | `/tax-invoice` | `lib/screens/tax_invoice_screen.dart` | ⬜ |
-| 15 | NFC Card Scan | 1280×800 | `/payment/nfc` | `lib/screens/nfc_scan_screen.dart` | ⬜ |
-| 16 | เดลิเวอรี่ · ติดตามไรเดอร์ | 1440×900 | `/delivery` | `lib/screens/delivery_screen.dart` | ⬜ |
-| 17 | จัดการสต็อก / Movements | 1440×900 | `/stock` | `lib/screens/stock_management_screen.dart` | ⬜ |
-| 18 | ส่งของผ่านผู้ให้บริการ | 1440×900 | `/shipping/providers` | `lib/screens/shipping_providers_screen.dart` | ⬜ |
-| 19 | ระบบคูปอง / โปรโมชั่น | 1440×900 | `/coupons` | `lib/screens/coupon_screen.dart` | ⬜ |
-| 20 | ระบบพนักงาน | 1440×900 | `/staff` | `lib/screens/staff_screen.dart` | ⬜ |
-| 21 | ระบบแอดมิน | 1440×900 | `/admin` | `lib/screens/admin_screen.dart` | ⬜ |
-| 22 | จัดการบาร์โค้ด | 1440×900 | `/barcode` | `lib/screens/barcode_screen.dart` | ⬜ |
-| 23 | พิมพ์ใบปะหน้าพัสดุ | 1440×900 | `/shipping/labels` | `lib/screens/shipping_label_screen.dart` | ⬜ |
-| 24 | CRM · สมาชิก | 1440×900 | `/crm` | `lib/screens/crm_screen.dart` | ⬜ |
-| 25 | ปิดกะ · Z-Report | 1440×900 | `/shift` | `lib/screens/shift_screen.dart` | ⬜ |
-| 26 | คืนเงิน / Void | 1440×900 | `/refund` | `lib/screens/refund_screen.dart` | ⬜ |
-| 27 | ใบสั่งซื้อ Supplier (PO) | 1440×900 | `/po` | `lib/screens/purchase_order_screen.dart` | ⬜ |
-| 28 | แก้ไขเมนู + BOM | 1440×900 | `/menu-editor` | `lib/screens/menu_editor_screen.dart` | ⬜ |
-| 29 | Multi-Branch HQ | 1440×900 | `/hq` | `lib/screens/multibranch_screen.dart` | ⬜ |
-| 30 | ออกแบบผังโต๊ะ (เจ้าของ) | 1440×900 | `/floor-designer` | `lib/screens/floor_plan_designer_screen.dart` | ⬜ |
-| 31 | สแกน QR สั่งจากโต๊ะ | 390×844 | `/self-order` | `lib/screens/self_order_screen.dart` | ⬜ |
-| 32 | ติดตามสถานะออเดอร์ | 390×844 | `/order-status` | `lib/screens/order_status_screen.dart` | ⬜ |
-| 33 | ระดับสมาชิก VIP/Gold/Premium | 1440×900 | `/tiers` | `lib/screens/membership_tiers_screen.dart` | ⬜ |
-| 34 | ศูนย์ส่วนลด | 1440×900 | `/discount-center` | `lib/screens/discount_center_screen.dart` | ⬜ |
-| 35 | Affiliate · แนะนำเพื่อน | 1440×900 | `/affiliate` | `lib/screens/affiliate_screen.dart` | ⬜ |
+| # | Screen (TH / EN) | Device | Canvas | Flutter route | Flutter file | Status |
+|---|---|---|---|---|---|---|
+| 01 | Cashier · จอขายหลัก | 🖥️ POS terminal | 1440×900 | `/cashier` | `lib/screens/cashier_screen.dart` | 🟡 |
+| 02 | Payment · ชำระเงิน | 🖥️ POS terminal | 1100×800 | `/payment` | `lib/screens/payment_screen.dart` | 🟡 |
+| 03 | Receipt · ใบเสร็จ | 🧾 Thermal print | 360×640 | `/receipt` | `lib/screens/receipt_screen.dart` | 🟡 |
+| 04 | Login · PIN | 🖥️ POS terminal | 1280×800 | `/login` | `lib/screens/login_screen.dart` | 🟡 |
+| 05 | Customer Display | 🪟 Secondary | 1280×800 | `/display/customer` | `lib/screens/customer_display_screen.dart` | ⬜ |
+| 06 | Kitchen Display (KDS) | 🪟 Secondary (wall) | 1440×900 | `/display/kitchen` | `lib/screens/kitchen_display_screen.dart` | ⬜ |
+| 07 | Sales Dashboard | 🖥️ Back-office | 1440×900 | `/dashboard` | `lib/screens/dashboard_screen.dart` | 🟡 |
+| 08 | Inventory · คลังสินค้า | 🖥️ Back-office | 1440×900 | `/inventory` | `lib/screens/inventory_screen.dart` | ⬜ |
+| 09 | iPad · ผังโต๊ะ Waiter | 📋 Tablet | 1024×768 | `/tablet/floor` | `lib/screens/tablet_waiter_screen.dart` | ⬜ |
+| 10 | Mobile · รับออเดอร์ที่โต๊ะ | 📱 Phone (staff) | 390×844 | `/mobile/order` | `lib/screens/mobile_order_screen.dart` | ⬜ |
+| 11 | Mobile · ผู้จัดการ | 📱 Phone (staff) | 390×844 | `/mobile/manager` | `lib/screens/mobile_manager_screen.dart` | ⬜ |
+| 12 | การจัดการบัญชี | 🖥️ Back-office | 1440×900 | `/accounting` | `lib/screens/accounting_screen.dart` | ⬜ |
+| 13 | สร้างบิล | 🖥️ Back-office | 1440×900 | `/bill/create` | `lib/screens/create_bill_screen.dart` | ⬜ |
+| 14 | ใบกำกับภาษี / e-Tax | 🖥️ Back-office | 1440×900 | `/tax-invoice` | `lib/screens/tax_invoice_screen.dart` | ⬜ |
+| 15 | NFC Card Scan | 🖥️ POS terminal | 1280×800 | `/payment/nfc` | `lib/screens/nfc_scan_screen.dart` | ⬜ |
+| 16 | เดลิเวอรี่ · ติดตามไรเดอร์ | 🖥️ Back-office (merchant) | 1440×900 | `/delivery` | `lib/screens/delivery_screen.dart` | ⬜ |
+| 17 | จัดการสต็อก / Movements | 🖥️ Back-office | 1440×900 | `/stock` | `lib/screens/stock_management_screen.dart` | ⬜ |
+| 18 | ส่งของผ่านผู้ให้บริการ | 🖥️ Back-office | 1440×900 | `/shipping/providers` | `lib/screens/shipping_providers_screen.dart` | ⬜ |
+| 19 | ระบบคูปอง / โปรโมชั่น | 🖥️ Back-office | 1440×900 | `/coupons` | `lib/screens/coupon_screen.dart` | ⬜ |
+| 20 | ระบบพนักงาน | 🖥️ Back-office | 1440×900 | `/staff` | `lib/screens/staff_screen.dart` | ⬜ |
+| 21 | ระบบแอดมิน | 🖥️ Back-office | 1440×900 | `/admin` | `lib/screens/admin_screen.dart` | ⬜ |
+| 22 | จัดการบาร์โค้ด | 🖥️ Back-office | 1440×900 | `/barcode` | `lib/screens/barcode_screen.dart` | ⬜ |
+| 23 | พิมพ์ใบปะหน้าพัสดุ | 🖥️ Back-office | 1440×900 | `/shipping/labels` | `lib/screens/shipping_label_screen.dart` | ⬜ |
+| 24 | CRM · สมาชิก | 🖥️ Back-office | 1440×900 | `/crm` | `lib/screens/crm_screen.dart` | ⬜ |
+| 25 | ปิดกะ · Z-Report | 🖥️ POS terminal | 1440×900 | `/shift` | `lib/screens/shift_screen.dart` | ⬜ |
+| 26 | คืนเงิน / Void | 🖥️ POS terminal | 1440×900 | `/refund` | `lib/screens/refund_screen.dart` | ⬜ |
+| 27 | ใบสั่งซื้อ Supplier (PO) | 🖥️ Back-office | 1440×900 | `/po` | `lib/screens/purchase_order_screen.dart` | ⬜ |
+| 28 | แก้ไขเมนู + BOM | 🖥️ Back-office | 1440×900 | `/menu-editor` | `lib/screens/menu_editor_screen.dart` | ⬜ |
+| 29 | Multi-Branch HQ | 🖥️ Back-office | 1440×900 | `/hq` | `lib/screens/multibranch_screen.dart` | ⬜ |
+| 30 | ออกแบบผังโต๊ะ (เจ้าของ) | 🖥️ Back-office | 1440×900 | `/floor-designer` | `lib/screens/floor_plan_designer_screen.dart` | ⬜ |
+| 31 | สแกน QR สั่งจากโต๊ะ | 📱 Phone (customer) | 390×844 | `/self-order` | `lib/screens/self_order_screen.dart` | ⬜ |
+| 32 | ติดตามสถานะออเดอร์ | 📱 Phone (customer) | 390×844 | `/order-status` | `lib/screens/order_status_screen.dart` | ⬜ |
+| 33 | ระดับสมาชิก VIP/Gold/Premium | 🖥️ Back-office | 1440×900 | `/tiers` | `lib/screens/membership_tiers_screen.dart` | ⬜ |
+| 34 | ศูนย์ส่วนลด | 🖥️ Back-office | 1440×900 | `/discount-center` | `lib/screens/discount_center_screen.dart` | ⬜ |
+| 35 | Affiliate · แนะนำเพื่อน | 🖥️ Back-office | 1440×900 | `/affiliate` | `lib/screens/affiliate_screen.dart` | ⬜ |
 | 36 | Customer · เมนูกริด | 390×844 | `/cust/menu` | `lib/screens/cust_menu_screen.dart` | ⬜ |
 | 37 | Customer · เลือกเมนู ปรับแต่ง | 390×844 | `/cust/item` | `lib/screens/cust_item_screen.dart` | ⬜ |
 | 38 | Customer · ตะกร้า รีวิว | 390×844 | `/cust/cart` | `lib/screens/cust_cart_screen.dart` | ⬜ |

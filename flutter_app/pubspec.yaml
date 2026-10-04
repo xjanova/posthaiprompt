@@ -5,13 +5,15 @@ publish_to: 'none'
 # Version: <semver>+<buildNumber>
 # Auto-updater compares this against GitHub Releases tag (vX.Y.Z).
 # In Android: version → versionName, buildNumber → versionCode.
-version: 1.0.0+1
+version: 2.0.0+2
 
 environment:
   sdk: ^3.11.5
 
 dependencies:
   flutter:
+    sdk: flutter
+  flutter_localizations:
     sdk: flutter
 
   # Navigation
@@ -31,9 +33,6 @@ dependencies:
   package_info_plus: ^8.1.1
   permission_handler: ^11.3.1
 
-  # Typography — Prompt font (TH+EN) auto-downloaded at runtime
-  google_fonts: ^6.2.1
-
   # Utils
   intl: ^0.20.1
   cupertino_icons: ^1.0.8
@@ -41,6 +40,13 @@ dependencies:
   # Windows native acrylic / mica via Win32 DwmExtendFrameIntoClientArea —
   # no-op on Android/iOS. Used in main.dart only when Platform.isWindows.
   flutter_acrylic: ^1.1.4
+  flutter_secure_storage: ^10.3.1
+  font_awesome_flutter: ^11.0.0
+  qr_flutter: ^4.1.0
+  barcode_widget: ^2.0.4
+  pdf: ^3.12.0
+  printing: ^5.14.3
+  crypto: ^3.0.7
 
 dev_dependencies:
   flutter_test:
@@ -49,14 +55,47 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  # Bundle Prompt + JetBrains Mono fonts later (place .ttf in assets/fonts/)
-  # fonts:
-  #   - family: Prompt
-  #     fonts:
-  #       - asset: assets/fonts/Prompt-Regular.ttf
-  #       - asset: assets/fonts/Prompt-Medium.ttf
-  #         weight: 500
-  #       - asset: assets/fonts/Prompt-SemiBold.ttf
-  #         weight: 600
-  #       - asset: assets/fonts/Prompt-Bold.ttf
-  #         weight: 700
+
+  # Nova theme art — 3D icons / food art generated in ChatGPT (via Chrome) to
+  # match thaiprompt.online's Nova set; mascot, kanok and deco shared with the web.
+  assets:
+    - assets/nova/icons/
+    - assets/nova/food/
+    - assets/nova/brand/
+    - assets/nova/mascot/
+    - assets/nova/deco/
+    - assets/nova/art/
+    - assets/nova/cat/
+
+  # Bundled so the POS renders identically offline (no runtime font fetch).
+  fonts:
+    - family: Anuphan
+      fonts:
+        - asset: assets/fonts/Anuphan-Light.ttf
+          weight: 300
+        - asset: assets/fonts/Anuphan-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Anuphan-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Anuphan-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Anuphan-Bold.ttf
+          weight: 700
+    - family: Trirong
+      fonts:
+        - asset: assets/fonts/Trirong-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Trirong-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Trirong-Bold.ttf
+          weight: 700
+    - family: JetBrainsMono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/JetBrainsMono-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/JetBrainsMono-Bold.ttf
+          weight: 700
