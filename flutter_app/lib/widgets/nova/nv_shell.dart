@@ -13,6 +13,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/format.dart';
@@ -87,33 +88,50 @@ class NvScaffold extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final route = GoRouterState.of(context).matchedLocation;
-    return Scaffold(
-      backgroundColor: tone == NvTone.night ? Nv.navy900 : Nv.ivory,
-      floatingActionButton: floating,
-      body: LayoutBuilder(builder: (context, c) {
-        final narrow = c.maxWidth < 760;
-        final content = Column(
-          children: [
-            if (showTopBar) NvTopBar(title: title, eyebrow: eyebrow, subtitle: subtitle, art: art, actions: actions, compact: narrow, night: tone == NvTone.night),
-            Expanded(child: Padding(padding: narrow ? const EdgeInsets.fromLTRB(12, 4, 12, 12) : padding, child: body)),
-          ],
-        );
-        final surface = tone == NvTone.night ? NvBackdrop.night(kanok: false, child: content) : NvBackdrop.day(child: content);
-        if (narrow) {
-          return Column(
-            children: [
-              Expanded(child: SafeArea(bottom: false, child: surface)),
-              NvBottomNav(current: route),
-            ],
-          );
-        }
-        return Row(
-          children: [
-            NvRail(current: route),
-            Expanded(child: surface),
-          ],
-        );
-      }),
+    return NvPageFrame(
+      route: route,
+      child: Scaffold(
+        backgroundColor: tone == NvTone.night ? Nv.navy900 : Nv.ivory,
+        floatingActionButton: floating,
+        body: LayoutBuilder(
+          builder: (context, c) {
+            final narrow = c.maxWidth < 760;
+            final content = Column(
+              children: [
+                if (showTopBar)
+                  NvTopBar(
+                    title: title,
+                    eyebrow: eyebrow,
+                    subtitle: subtitle,
+                    art: art,
+                    actions: actions,
+                    compact: narrow,
+                    night: tone == NvTone.night,
+                  ),
+                Expanded(
+                  child: Padding(padding: narrow ? const EdgeInsets.fromLTRB(12, 4, 12, 12) : padding, child: body),
+                ),
+              ],
+            );
+            final surface = tone == NvTone.night ? NvBackdrop.night(kanok: false, child: content) : NvBackdrop.day(child: content);
+            if (narrow) {
+              return Column(
+                children: [
+                  Expanded(child: SafeArea(bottom: false, child: surface)),
+                  NvBottomNav(current: route),
+                ],
+              );
+            }
+            return Row(
+              children: [
+                NvRail(current: route),
+                // tablets in landscape: keep the top bar clear of the status bar / cut-outs
+                Expanded(child: SafeArea(left: false, child: surface)),
+              ],
+            );
+          },
+        ),
+      ),
     );
   }
 }
@@ -147,10 +165,7 @@ class NvRail extends StatelessWidget {
                 borderRadius: BorderRadius.circular(40),
                 child: Stack(
                   alignment: Alignment.center,
-                  children: [
-                    NvArt(NvAssets.medallionWeb, width: 64, height: 64),
-                    NvArt(NvAssets.mark, width: 30, height: 30),
-                  ],
+                  children: [NvArt(NvAssets.medallionWeb, width: 64, height: 64), NvArt(NvAssets.mark, width: 30, height: 30)],
                 ),
               ),
             ),
@@ -224,13 +239,15 @@ class _RailButtonState extends State<_RailButton> {
                     children: [
                       Icon(widget.item.icon, size: 18, color: a ? const Color(0xFF1A1405) : (_hover ? Nv.gold200 : Nv.onNight2)),
                       const SizedBox(height: 5),
-                      Text(widget.item.label,
-                          style: TextStyle(
-                            fontFamily: Nv.fontUi,
-                            fontSize: 11.5,
-                            fontWeight: a ? FontWeight.w700 : FontWeight.w500,
-                            color: a ? const Color(0xFF1A1405) : Nv.onNight2,
-                          )),
+                      Text(
+                        widget.item.label,
+                        style: TextStyle(
+                          fontFamily: Nv.fontUi,
+                          fontSize: 11.5,
+                          fontWeight: a ? FontWeight.w700 : FontWeight.w500,
+                          color: a ? const Color(0xFF1A1405) : Nv.onNight2,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -248,8 +265,10 @@ class _RailButtonState extends State<_RailButton> {
                         borderRadius: BorderRadius.circular(9),
                         border: Border.all(color: Nv.navy900, width: 1.5),
                       ),
-                      child: Text('${widget.badge > 99 ? '99+' : widget.badge}',
-                          style: const TextStyle(fontFamily: Nv.fontUi, fontSize: 9.5, fontWeight: FontWeight.w800, color: Colors.white)),
+                      child: Text(
+                        '${widget.badge > 99 ? '99+' : widget.badge}',
+                        style: const TextStyle(fontFamily: Nv.fontUi, fontSize: 9.5, fontWeight: FontWeight.w800, color: Colors.white),
+                      ),
                     ),
                   ),
               ],
@@ -273,7 +292,13 @@ class _StaffMenu extends StatelessWidget {
       offset: const Offset(80, -10),
       onSelected: (v) => nvStaffAction(context, v),
       itemBuilder: (_) => [
-        PopupMenuItem(enabled: false, child: Text('${staff.name}\n${staff.role.label}', style: Nv.ui(13, color: Nv.ink2, weight: FontWeight.w600))),
+        PopupMenuItem(
+          enabled: false,
+          child: Text(
+            '${staff.name}\n${staff.role.label}',
+            style: Nv.ui(13, color: Nv.ink2, weight: FontWeight.w600),
+          ),
+        ),
         const PopupMenuDivider(),
         PopupMenuItem(value: 'lock', child: _menuRow(NvIcons.lock, 'ล็อกหน้าจอ / สลับผู้ใช้')),
         PopupMenuItem(value: 'clockout', child: _menuRow(NvIcons.logout, 'ออกกะงาน (ลงเวลาออก)')),
@@ -284,14 +309,26 @@ class _StaffMenu extends StatelessWidget {
           const SizedBox(height: 4),
           SizedBox(
             width: 84,
-            child: Text(staff.name, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center, style: Nv.ui(11, color: Nv.onNight2)),
+            child: Text(
+              staff.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: Nv.ui(11, color: Nv.onNight2),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _menuRow(IconData i, String t) => Row(children: [Icon(i, size: 14, color: Nv.goldInk), const SizedBox(width: 10), Text(t)]);
+  Widget _menuRow(IconData i, String t) => Row(
+    children: [
+      Icon(i, size: 14, color: Nv.goldInk),
+      const SizedBox(width: 10),
+      Text(t),
+    ],
+  );
 }
 
 /// Shared staff-menu actions (rail + bottom nav + top bar).
@@ -301,8 +338,13 @@ Future<void> nvStaffAction(BuildContext context, String action) async {
     store.logout();
     if (context.mounted) context.go('/login');
   } else if (action == 'clockout') {
-    final ok = await showNvConfirm(context,
-        title: 'ออกกะงาน?', message: 'ลงเวลาออกงานของ ${store.currentStaff?.name ?? ''} และกลับไปหน้าเข้าสู่ระบบ', confirmLabel: 'ออกกะงาน', danger: false);
+    final ok = await showNvConfirm(
+      context,
+      title: 'ออกกะงาน?',
+      message: 'ลงเวลาออกงานของ ${store.currentStaff?.name ?? ''} และกลับไปหน้าเข้าสู่ระบบ',
+      confirmLabel: 'ออกกะงาน',
+      danger: false,
+    );
     if (!ok || !context.mounted) return;
     store.logout(clockOut: true);
     context.go('/login');
@@ -330,14 +372,11 @@ class NvBottomNav extends StatelessWidget {
           child: Row(
             children: [
               for (final it in items)
-                Expanded(child: _BottomItem(icon: it.icon, label: it.label, active: current == it.route, onTap: () => context.go(it.route))),
-              Expanded(
-                child: _BottomItem(
-                  icon: NvIcons.grid,
-                  label: 'เมนูทั้งหมด',
-                  active: false,
-                  onTap: () => context.go('/home'),
+                Expanded(
+                  child: _BottomItem(icon: it.icon, label: it.label, active: current == it.route, onTap: () => context.go(it.route)),
                 ),
+              Expanded(
+                child: _BottomItem(icon: NvIcons.grid, label: 'เมนูทั้งหมด', active: false, onTap: () => context.go('/home')),
               ),
             ],
           ),
@@ -356,21 +395,26 @@ class _BottomItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => InkWell(
-        onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedContainer(
-              duration: Nv.fast,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-              decoration: BoxDecoration(gradient: active ? Nv.btnGold : null, borderRadius: BorderRadius.circular(14)),
-              child: Icon(icon, size: 17, color: active ? const Color(0xFF1A1405) : Nv.onNight2),
-            ),
-            const SizedBox(height: 3),
-            Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: Nv.ui(10.5, color: active ? Nv.gold200 : Nv.onNight3, weight: FontWeight.w600)),
-          ],
+    onTap: onTap,
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        AnimatedContainer(
+          duration: Nv.fast,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+          decoration: BoxDecoration(gradient: active ? Nv.btnGold : null, borderRadius: BorderRadius.circular(14)),
+          child: Icon(icon, size: 17, color: active ? const Color(0xFF1A1405) : Nv.onNight2),
         ),
-      );
+        const SizedBox(height: 3),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Nv.ui(10.5, color: active ? Nv.gold200 : Nv.onNight3, weight: FontWeight.w600),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Top bar: title block + actions + shift / sync / clock / lock.
@@ -397,43 +441,77 @@ class NvTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = AppScope.of(context);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(compact ? 12 : 24, compact ? 8 : 16, compact ? 12 : 24, compact ? 8 : 12),
-      child: Row(
-        children: [
-          if (art != null && !compact) ...[NvArt.icon(art!, size: 54), const SizedBox(width: 12)],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (eyebrow != null && !compact) Text(eyebrow!, style: Nv.eyebrow(color: night ? Nv.gold300 : Nv.goldInk)),
-                Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Nv.display(compact ? 20 : 25, color: night ? Nv.onNight : Nv.ink)),
-                if (subtitle != null && !compact)
-                  Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Nv.ui(13, color: night ? Nv.onNight3 : Nv.ink3)),
-              ],
-            ),
-          ),
-          if (actions.isNotEmpty) ...[
-            const SizedBox(width: 10),
-            Flexible(
-              flex: 0,
-              child: Wrap(spacing: 8, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: actions),
-            ),
+    final lock = NvIconButton(
+      NvIcons.lock,
+      tooltip: 'ล็อกหน้าจอ',
+      onNight: night,
+      onPressed: store.currentStaff == null ? null : () => nvStaffAction(context, 'lock'),
+    );
+    final titleBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (eyebrow != null && !compact) Text(eyebrow!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Nv.eyebrow(color: night ? Nv.gold300 : Nv.goldInk)),
+        Text(title, maxLines: 1, overflow: TextOverflow.ellipsis, style: Nv.display(compact ? 20 : 25, color: night ? Nv.onNight : Nv.ink)),
+        if (subtitle != null && !compact)
+          Text(subtitle!, maxLines: 1, overflow: TextOverflow.ellipsis, style: Nv.ui(13, color: night ? Nv.onNight3 : Nv.ink3)),
+      ],
+    );
+
+    // Phones / narrow windows: title + lock on one row, actions on a second
+    // row that scrolls sideways instead of overflowing.
+    if (compact) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [Expanded(child: titleBlock), const SizedBox(width: 8), lock]),
+            if (actions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: [for (var i = 0; i < actions.length; i++) ...[if (i > 0) const SizedBox(width: 8), actions[i]]]),
+              ),
+            ],
           ],
-          if (!compact) ...[
+        ),
+      );
+    }
+
+    return LayoutBuilder(builder: (context, c) {
+      final w = c.maxWidth;
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
+        child: Row(
+          children: [
+            if (art != null && w >= 900) ...[NvArt.icon(art!, size: 54), const SizedBox(width: 12)],
+            Expanded(child: titleBlock),
+            if (actions.isNotEmpty) ...[
+              const SizedBox(width: 10),
+              // capped width: long action sets wrap onto a second line rather than overflow
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: w * (w >= 1200 ? 0.5 : 0.42)),
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: actions,
+                ),
+              ),
+            ],
             const SizedBox(width: 14),
             NvShiftChip(night: night),
+            if (w >= 1050) ...[const SizedBox(width: 8), NvSyncPill(night: night)],
+            if (w >= 900) ...[const SizedBox(width: 10), NvClock(night: night)],
             const SizedBox(width: 8),
-            NvSyncPill(night: night),
-            const SizedBox(width: 10),
-            NvClock(night: night),
+            lock,
           ],
-          const SizedBox(width: 8),
-          NvIconButton(NvIcons.lock, tooltip: 'ล็อกหน้าจอ', onNight: night, onPressed: store.currentStaff == null ? null : () => nvStaffAction(context, 'lock')),
-        ],
-      ),
-    );
+        ),
+      );
+    });
   }
 }
 
@@ -463,8 +541,14 @@ class NvShiftChip extends StatelessWidget {
             children: [
               Icon(NvIcons.clock, size: 13, color: open ? Nv.jade : Nv.amber),
               const SizedBox(width: 7),
-              Text(open ? 'กะเปิด ${hm(store.currentShift!.openedAt)}' : 'ยังไม่เปิดกะ',
-                  style: Nv.ui(12.5, color: open ? (night ? Nv.jadeLight : const Color(0xFF1F6B44)) : (night ? Nv.gold300 : const Color(0xFF8A5A00)), weight: FontWeight.w700)),
+              Text(
+                open ? 'กะเปิด ${hm(store.currentShift!.openedAt)}' : 'ยังไม่เปิดกะ',
+                style: Nv.ui(
+                  12.5,
+                  color: open ? (night ? Nv.jadeLight : const Color(0xFF1F6B44)) : (night ? Nv.gold300 : const Color(0xFF8A5A00)),
+                  weight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),
@@ -517,8 +601,10 @@ class NvSyncPill extends StatelessWidget {
                 children: [
                   Icon(icon, size: 13, color: color),
                   const SizedBox(width: 6),
-                  Text(st == SyncState.disabled ? 'ออฟไลน์' : st.label,
-                      style: Nv.ui(12, color: night ? Nv.onNight2 : Nv.ink2, weight: FontWeight.w600)),
+                  Text(
+                    st == SyncState.disabled ? 'ออฟไลน์' : st.label,
+                    style: Nv.ui(12, color: night ? Nv.onNight2 : Nv.ink2, weight: FontWeight.w600),
+                  ),
                 ],
               ),
             ),
@@ -590,25 +676,99 @@ class NvKiosk extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Nv.navy950,
-      body: NvBackdrop.night(
-        image: image,
-        imageOpacity: imageOpacity,
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Positioned.fill(child: child),
-              if (showLogo)
-                Positioned(
-                  top: 10,
-                  left: 14,
-                  child: _KioskExit(exitRoute: exitRoute),
-                ),
-            ],
+    return NvPageFrame(
+      route: GoRouterState.of(context).matchedLocation,
+      kiosk: true,
+      child: Scaffold(
+        backgroundColor: Nv.navy950,
+        body: NvBackdrop.night(
+          image: image,
+          imageOpacity: imageOpacity,
+          child: SafeArea(
+            child: Stack(
+              children: [
+                Positioned.fill(child: child),
+                if (showLogo) Positioned(top: 10, left: 14, child: _KioskExit(exitRoute: exitRoute)),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Where the Android back button / back gesture leads from each page.
+/// Navigation uses `context.go` (no stack), so without this the system back
+/// would close the app from any screen.
+const Map<String, String> kBackTargets = {
+  '/payment': '/cashier',
+  '/payment/nfc': '/payment',
+  '/receipt': '/cashier',
+  '/bill/create': '/cashier',
+  '/refund': '/orders',
+  '/tax-invoice': '/orders',
+  '/floor-designer': '/tablet/floor',
+  '/stock': '/inventory',
+  '/po': '/inventory',
+  '/barcode': '/menu-editor',
+  '/tiers': '/crm',
+  '/shipping/labels': '/delivery',
+  '/shipping/providers': '/delivery',
+  '/staff': '/settings',
+  '/admin': '/settings',
+  // customer-facing kiosk: back stays inside the customer flow
+  '/cust/item': '/cust/menu',
+  '/cust/cart': '/cust/menu',
+  '/cust/confirm': '/cust/menu',
+  '/cust/menu': '/self-order',
+  '/order-status': '/self-order',
+};
+
+/// Kiosk pages where back does nothing (customers can't leave kiosk mode).
+const Set<String> kKioskRoots = {'/self-order', '/display/customer'};
+
+DateTime? _lastBackAtHome;
+
+/// Page wrapper shared by every Nova frame:
+///  • Android back → parent page (see [kBackTargets]); at home, press twice to exit.
+///  • kiosk pages never leave the customer flow via back.
+///  • clamps the system font scale (1.0–1.15×) so phones with "large text"
+///    don't break dense POS layouts.
+class NvPageFrame extends StatelessWidget {
+  final String route;
+  final Widget child;
+  final bool kiosk;
+  const NvPageFrame({super.key, required this.route, required this.child, this.kiosk = false});
+
+  void _onBack(BuildContext context) {
+    final target = kBackTargets[route];
+    if (target != null) {
+      context.go(target);
+      return;
+    }
+    if (kiosk) return; // stay — exit kiosk only via long-press logo + manager PIN
+    if (route != '/home') {
+      context.go('/home'); // the launcher reaches every module the role may open
+      return;
+    }
+    final now = DateTime.now();
+    if (_lastBackAtHome != null && now.difference(_lastBackAtHome!) < const Duration(seconds: 2)) {
+      SystemNavigator.pop();
+      return;
+    }
+    _lastBackAtHome = now;
+    nvToast(context, 'กดย้อนกลับอีกครั้งเพื่อออกจากแอป');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _onBack(context);
+      },
+      child: MediaQuery.withClampedTextScaling(minScaleFactor: 1.0, maxScaleFactor: 1.15, child: child),
     );
   }
 }

@@ -60,10 +60,19 @@ void main() {
   const routesArg = String.fromEnvironment('ROUTES');
   const sizeArg = String.fromEnvironment('SIZE', defaultValue: 'desktop');
   final routes = routesArg.isEmpty ? _allRoutes : routesArg.split(',');
+  // Named presets, or any WxH (e.g. --dart-define=SIZE=1366x768).
   final size = switch (sizeArg) {
-    'phone' => const Size(390, 844),
-    'tablet' => const Size(1180, 820),
+    'phone' => const Size(390, 844), // iPhone / most Android phones
+    'handheld' => const Size(360, 720), // Sunmi V2 / handheld POS
+    'tablet' => const Size(1180, 820), // iPad Air / 11" Android, landscape
+    'tablet-portrait' => const Size(820, 1180),
+    'pos4x3' => const Size(1024, 768), // 15" 4:3 POS terminals
+    'pos1366' => const Size(1366, 768), // most Windows touch POS
+    'fhd' => const Size(1920, 1080), // Sunmi T2 / 15.6" FHD POS
     'small' => const Size(1024, 700),
+    'desktop' => const Size(1440, 900),
+    _ when RegExp(r'^\d+x\d+$').hasMatch(sizeArg) =>
+      Size(double.parse(sizeArg.split('x')[0]), double.parse(sizeArg.split('x')[1])),
     _ => const Size(1440, 900),
   };
 

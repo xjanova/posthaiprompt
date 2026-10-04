@@ -335,11 +335,13 @@ class _CouponCard extends StatelessWidget {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Text(
+                        Flexible(
+                          child: Text(
                           d.usageLimit > 0
                               ? 'ใช้แล้ว ${groupDigits(d.usedCount)}/${groupDigits(d.usageLimit)} ครั้ง'
                               : 'ใช้แล้ว ${groupDigits(d.usedCount)} ครั้ง · ไม่จำกัดจำนวน',
                           style: Nv.ui(12, color: Nv.ink3, weight: FontWeight.w600),
+                        ),
                         ),
                         if (d.usageLimit > 0) ...[
                           const SizedBox(width: 10),
@@ -358,7 +360,10 @@ class _CouponCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 10),
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         Tooltip(
                           message: d.active ? 'ปิดการใช้คูปองนี้' : 'เปิดการใช้คูปองนี้',
@@ -371,22 +376,14 @@ class _CouponCard extends StatelessWidget {
                           ),
                         ),
                         Text(d.active ? 'เปิด' : 'ปิด', style: Nv.ui(12.5, color: Nv.ink3)),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: NvButton.gold(
-                              'ใช้กับบิล',
-                              icon: NvIcons.cashier,
-                              size: NvButtonSize.sm,
-                              tooltip: cartEmpty ? 'ตะกร้าว่าง' : 'ใช้คูปองนี้กับบิลที่หน้าขาย',
-                              onPressed: cartEmpty || dim ? null : () => _apply(context),
-                            ),
-                          ),
+                        NvButton.gold(
+                          'ใช้กับบิล',
+                          icon: NvIcons.cashier,
+                          size: NvButtonSize.sm,
+                          tooltip: cartEmpty ? 'ตะกร้าว่าง' : 'ใช้คูปองนี้กับบิลที่หน้าขาย',
+                          onPressed: cartEmpty || dim ? null : () => _apply(context),
                         ),
-                        const SizedBox(width: 6),
                         NvIconButton(NvIcons.edit, size: 36, tooltip: 'แก้ไข', onPressed: () => _editCoupon(context, d)),
-                        const SizedBox(width: 6),
                         NvIconButton(NvIcons.trash, size: 36, tooltip: 'ลบ', color: Nv.lacquer, onPressed: () => _deleteCoupon(context, d)),
                       ],
                     ),

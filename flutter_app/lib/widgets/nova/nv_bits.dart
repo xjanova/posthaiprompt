@@ -17,15 +17,15 @@ import 'nv_surfaces.dart';
 enum NvTint { gold, jade, amber, lacquer, sapphire, navy, neutral, amethyst }
 
 ({Color fg, Color bg}) nvTint(NvTint t) => switch (t) {
-      NvTint.gold => (fg: Nv.goldInk, bg: Nv.gold100),
-      NvTint.jade => (fg: const Color(0xFF1F6B44), bg: Nv.jadeTint),
-      NvTint.amber => (fg: const Color(0xFF8A5A00), bg: Nv.amberTint),
-      NvTint.lacquer => (fg: Nv.lacquerDeep, bg: Nv.lacquerTint),
-      NvTint.sapphire => (fg: Nv.sapphire, bg: Nv.sapphireTint),
-      NvTint.navy => (fg: Nv.gold200, bg: Nv.navy700),
-      NvTint.neutral => (fg: Nv.ink2, bg: Nv.ivoryDeep),
-      NvTint.amethyst => (fg: Colors.white, bg: Nv.amethyst),
-    };
+  NvTint.gold => (fg: Nv.goldInk, bg: Nv.gold100),
+  NvTint.jade => (fg: const Color(0xFF1F6B44), bg: Nv.jadeTint),
+  NvTint.amber => (fg: const Color(0xFF8A5A00), bg: Nv.amberTint),
+  NvTint.lacquer => (fg: Nv.lacquerDeep, bg: Nv.lacquerTint),
+  NvTint.sapphire => (fg: Nv.sapphire, bg: Nv.sapphireTint),
+  NvTint.navy => (fg: Nv.gold200, bg: Nv.navy700),
+  NvTint.neutral => (fg: Nv.ink2, bg: Nv.ivoryDeep),
+  NvTint.amethyst => (fg: Colors.white, bg: Nv.amethyst),
+};
 
 /// Small status pill with a dot (ชำระแล้ว · ค้างชำระ · สต็อกต่ำ).
 class NvBadge extends StatelessWidget {
@@ -44,11 +44,21 @@ class NvBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[Icon(icon, size: 11, color: c.fg), const SizedBox(width: 5)] else if (dot) ...[
-            Container(width: 6, height: 6, decoration: BoxDecoration(color: c.fg, shape: BoxShape.circle)),
+          if (icon != null) ...[
+            Icon(icon, size: 11, color: c.fg),
+            const SizedBox(width: 5),
+          ] else if (dot) ...[
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: c.fg, shape: BoxShape.circle),
+            ),
             const SizedBox(width: 6),
           ],
-          Text(label, style: TextStyle(fontFamily: Nv.fontUi, fontSize: 12, fontWeight: FontWeight.w600, color: c.fg, height: 1.2)),
+          Text(
+            label,
+            style: TextStyle(fontFamily: Nv.fontUi, fontSize: 12, fontWeight: FontWeight.w600, color: c.fg, height: 1.2),
+          ),
         ],
       ),
     );
@@ -88,8 +98,14 @@ class NvChip extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (icon != null) ...[Icon(icon, size: 14, color: selected ? Nv.gold300 : (onNight ? Nv.gold300 : Nv.goldInk)), const SizedBox(width: 7)],
-              Text(label, style: TextStyle(fontFamily: Nv.fontUi, fontSize: 13.5, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: fg)),
+              if (icon != null) ...[
+                Icon(icon, size: 14, color: selected ? Nv.gold300 : (onNight ? Nv.gold300 : Nv.goldInk)),
+                const SizedBox(width: 7),
+              ],
+              Text(
+                label,
+                style: TextStyle(fontFamily: Nv.fontUi, fontSize: 13.5, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: fg),
+              ),
               if (count != null) ...[
                 const SizedBox(width: 7),
                 Container(
@@ -98,7 +114,10 @@ class NvChip extends StatelessWidget {
                     color: selected ? Nv.gold400.withValues(alpha: 0.2) : (onNight ? Colors.white.withValues(alpha: 0.08) : Nv.ivoryDeep),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text('$count', style: Nv.money(11, color: selected ? Nv.gold200 : (onNight ? Nv.onNight2 : Nv.ink3), weight: FontWeight.w600)),
+                  child: Text(
+                    '$count',
+                    style: Nv.money(11, color: selected ? Nv.gold200 : (onNight ? Nv.onNight2 : Nv.ink3), weight: FontWeight.w600),
+                  ),
                 ),
               ],
             ],
@@ -200,10 +219,12 @@ class NvStatTile extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Nv.ui(12.5, color: night ? Nv.onNight3 : Nv.ink3, weight: FontWeight.w500)),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Nv.ui(12.5, color: night ? Nv.onNight3 : Nv.ink3, weight: FontWeight.w500),
+              ),
               const SizedBox(height: 4),
               FittedBox(
                 fit: BoxFit.scaleDown,
@@ -212,10 +233,12 @@ class NvStatTile extends StatelessWidget {
               ),
               if (caption != null) ...[
                 const SizedBox(height: 3),
-                Text(caption!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Nv.ui(11.5, color: night ? Nv.onNight3 : nvTint(tint).fg, weight: FontWeight.w600)),
+                Text(
+                  caption!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Nv.ui(11.5, color: night ? Nv.onNight3 : nvTint(tint).fg, weight: FontWeight.w600),
+                ),
               ],
             ],
           ),
@@ -237,15 +260,7 @@ class NvPageHeader extends StatelessWidget {
   final List<Widget> actions;
   final bool onNight;
 
-  const NvPageHeader({
-    super.key,
-    required this.title,
-    this.eyebrow,
-    this.subtitle,
-    this.art,
-    this.actions = const [],
-    this.onNight = false,
-  });
+  const NvPageHeader({super.key, required this.title, this.eyebrow, this.subtitle, this.art, this.actions = const [], this.onNight = false});
 
   @override
   Widget build(BuildContext context) {
@@ -258,20 +273,21 @@ class NvPageHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (eyebrow != null) ...[
-                Text(eyebrow!, style: Nv.eyebrow(color: onNight ? Nv.gold300 : Nv.goldInk)),
-                const SizedBox(height: 3),
-              ],
-              Text(title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: Nv.display(26, color: onNight ? Nv.onNight : Nv.ink)),
+              if (eyebrow != null) ...[Text(eyebrow!, style: Nv.eyebrow(color: onNight ? Nv.gold300 : Nv.goldInk)), const SizedBox(height: 3)],
+              Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Nv.display(26, color: onNight ? Nv.onNight : Nv.ink),
+              ),
               if (subtitle != null) ...[
                 const SizedBox(height: 3),
-                Text(subtitle!,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Nv.ui(13.5, color: onNight ? Nv.onNight3 : Nv.ink3)),
+                Text(
+                  subtitle!,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Nv.ui(13.5, color: onNight ? Nv.onNight3 : Nv.ink3),
+                ),
               ],
             ],
           ),
@@ -296,20 +312,27 @@ class NvSectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Row(
-          children: [
-            if (icon != null) ...[Icon(icon, size: 15, color: onNight ? Nv.gold300 : Nv.goldInk), const SizedBox(width: 8)],
-            Container(width: 3, height: 16, decoration: BoxDecoration(gradient: Nv.btnGold, borderRadius: BorderRadius.circular(2))),
-            const SizedBox(width: 9),
-            Expanded(
-              child: Text(title, style: Nv.ui(15.5, color: onNight ? Nv.onNight : Nv.ink, weight: FontWeight.w700)),
-            ),
-            if (trailing != null) Text(trailing!, style: Nv.ui(12.5, color: onNight ? Nv.onNight3 : Nv.ink3)),
-            ?action,
-          ],
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(
+      children: [
+        if (icon != null) ...[Icon(icon, size: 15, color: onNight ? Nv.gold300 : Nv.goldInk), const SizedBox(width: 8)],
+        Container(
+          width: 3,
+          height: 16,
+          decoration: BoxDecoration(gradient: Nv.btnGold, borderRadius: BorderRadius.circular(2)),
         ),
-      );
+        const SizedBox(width: 9),
+        Expanded(
+          child: Text(
+            title,
+            style: Nv.ui(15.5, color: onNight ? Nv.onNight : Nv.ink, weight: FontWeight.w700),
+          ),
+        ),
+        if (trailing != null) Text(trailing!, style: Nv.ui(12.5, color: onNight ? Nv.onNight3 : Nv.ink3)),
+        ?action,
+      ],
+    ),
+  );
 }
 
 /// Empty state with a mascot pose (empty · search · sleepy · chef · gift · clock …).
@@ -345,16 +368,20 @@ class NvEmptyState extends StatelessWidget {
           children: [
             NvArt.mascot(mascot, height: size),
             const SizedBox(height: 12),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: Nv.display(19, color: onNight ? Nv.onNight : Nv.ink)),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Nv.display(19, color: onNight ? Nv.onNight : Nv.ink),
+            ),
             if (message != null) ...[
               const SizedBox(height: 6),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 380),
-                child: Text(message!,
-                    textAlign: TextAlign.center,
-                    style: Nv.ui(13.5, color: onNight ? Nv.onNight3 : Nv.ink3, height: 1.45)),
+                child: Text(
+                  message!,
+                  textAlign: TextAlign.center,
+                  style: Nv.ui(13.5, color: onNight ? Nv.onNight3 : Nv.ink3, height: 1.45),
+                ),
               ),
             ],
             if (actionLabel != null && onAction != null) ...[
@@ -435,9 +462,18 @@ class _NvSearchFieldState extends State<NvSearchField> {
                 },
               ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(Nv.rPill), borderSide: BorderSide(color: night ? Nv.lineNight : Nv.line)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Nv.rPill), borderSide: BorderSide(color: night ? Nv.lineNight : Nv.line)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(Nv.rPill), borderSide: const BorderSide(color: Nv.gold500, width: 1.6)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(Nv.rPill),
+          borderSide: BorderSide(color: night ? Nv.lineNight : Nv.line),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(Nv.rPill),
+          borderSide: BorderSide(color: night ? Nv.lineNight : Nv.line),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(Nv.rPill),
+          borderSide: const BorderSide(color: Nv.gold500, width: 1.6),
+        ),
       ),
     );
   }
@@ -489,7 +525,10 @@ class NvField extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(left: 4, bottom: 6),
-          child: Text(label, style: Nv.ui(12.5, color: Nv.ink2, weight: FontWeight.w600)),
+          child: Text(
+            label,
+            style: Nv.ui(12.5, color: Nv.ink2, weight: FontWeight.w600),
+          ),
         ),
         TextFormField(
           controller: controller,
@@ -536,7 +575,10 @@ class NvAvatar extends StatelessWidget {
         gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [c1, c2]),
         border: Border.all(color: ring ? Nv.gold400 : Colors.white.withValues(alpha: 0.6), width: ring ? 2 : 1),
       ),
-      child: Text(text, style: TextStyle(fontFamily: Nv.fontUi, fontSize: size * 0.42, fontWeight: FontWeight.w700, color: Colors.white, height: 1)),
+      child: Text(
+        text,
+        style: TextStyle(fontFamily: Nv.fontUi, fontSize: size * 0.42, fontWeight: FontWeight.w700, color: Colors.white, height: 1),
+      ),
     );
   }
 }
@@ -551,8 +593,10 @@ class NvMoney extends StatelessWidget {
   const NvMoney(this.amount, {super.key, this.size = 16, this.color, this.decimals = false, this.weight = FontWeight.w700});
 
   @override
-  Widget build(BuildContext context) =>
-      Text(baht(amount, decimals: decimals), style: Nv.money(size, color: color ?? Nv.ink, weight: weight));
+  Widget build(BuildContext context) => Text(
+    baht(amount, decimals: decimals),
+    style: Nv.money(size, color: color ?? Nv.ink, weight: weight),
+  );
 }
 
 /// "label ........ value" row for summaries / receipts / settings.
@@ -567,24 +611,28 @@ class NvKeyValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(label,
-                  style: Nv.ui(strong ? 15 : 13.5,
-                      color: onNight ? (strong ? Nv.onNight : Nv.onNight2) : (strong ? Nv.ink : Nv.ink3),
-                      weight: strong ? FontWeight.w700 : FontWeight.w500)),
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: Nv.ui(
+              strong ? 15 : 13.5,
+              color: onNight ? (strong ? Nv.onNight : Nv.onNight2) : (strong ? Nv.ink : Nv.ink3),
+              weight: strong ? FontWeight.w700 : FontWeight.w500,
             ),
-            Text(
-              value,
-              style: mono
-                  ? Nv.money(strong ? 17 : 14, color: valueColor ?? (onNight ? Nv.onNight : Nv.ink), weight: strong ? FontWeight.w700 : FontWeight.w600)
-                  : Nv.ui(14, color: valueColor ?? (onNight ? Nv.onNight : Nv.ink), weight: FontWeight.w600),
-            ),
-          ],
+          ),
         ),
-      );
+        Text(
+          value,
+          style: mono
+              ? Nv.money(strong ? 17 : 14, color: valueColor ?? (onNight ? Nv.onNight : Nv.ink), weight: strong ? FontWeight.w700 : FontWeight.w600)
+              : Nv.ui(14, color: valueColor ?? (onNight ? Nv.onNight : Nv.ink), weight: FontWeight.w600),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Tiny quantity stepper (− 2 +).
@@ -597,27 +645,37 @@ class NvStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 36 px visual, 44 px touch target (Material / Apple minimum for fingers)
     Widget b(IconData i, VoidCallback? f) => InkResponse(
-          onTap: f,
-          radius: 18,
-          child: Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: onNight ? Colors.white.withValues(alpha: 0.07) : Nv.paper,
-              border: Border.all(color: onNight ? Nv.lineNight : Nv.line),
-            ),
-            child: Icon(i, size: 12, color: f == null ? Nv.ink4 : (onNight ? Nv.gold200 : Nv.ink2)),
+      onTap: f,
+      radius: 24,
+      child: Container(
+        width: 44,
+        height: 44,
+        alignment: Alignment.center,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: onNight ? Colors.white.withValues(alpha: 0.07) : Nv.paper,
+            border: Border.all(color: onNight ? Nv.lineNight : Nv.line),
           ),
-        );
+          child: Icon(i, size: 13, color: f == null ? Nv.ink4 : (onNight ? Nv.gold200 : Nv.ink2)),
+        ),
+      ),
+    );
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         b(NvIcons.minus, onMinus),
         SizedBox(
           width: 34,
-          child: Text('$value', textAlign: TextAlign.center, style: Nv.money(15, color: onNight ? Nv.onNight : Nv.ink)),
+          child: Text(
+            '$value',
+            textAlign: TextAlign.center,
+            style: Nv.money(15, color: onNight ? Nv.onNight : Nv.ink),
+          ),
         ),
         b(NvIcons.plus, onPlus),
       ],

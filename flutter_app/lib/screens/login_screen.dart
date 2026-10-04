@@ -108,7 +108,11 @@ class _LoginScreenState extends State<LoginScreen> {
           children: [
             NvArt(NvAssets.logoOnDark, height: 44, width: 170),
             const SizedBox(height: 10),
-            NvFoilText(store.shopName, style: Nv.display(26, weight: FontWeight.w700), align: TextAlign.center),
+            NvFoilText(
+              store.shopName,
+              style: Nv.display(26, weight: FontWeight.w700),
+              align: TextAlign.center,
+            ),
             Text(store.branch, style: Nv.ui(13.5, color: Nv.onNight3)),
             const SizedBox(height: 8),
             const NvKanokDivider(width: 220, thin: true, opacity: 0.85),
@@ -127,14 +131,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     const Icon(NvIcons.warning, size: 14, color: Nv.gold300),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: Text('ไฟล์ข้อมูลหลักเสียหาย ระบบกู้คืนจากสำเนาล่าสุดให้แล้ว — โปรดตรวจยอดขายล่าสุด',
-                          style: Nv.ui(12, color: Nv.gold200)),
+                      child: Text(
+                        'ไฟล์ข้อมูลหลักเสียหาย ระบบกู้คืนจากสำเนาล่าสุดให้แล้ว — โปรดตรวจยอดขายล่าสุด',
+                        style: Nv.ui(12, color: Nv.gold200),
+                      ),
                     ),
                   ],
                 ),
               ),
             if (staff.length > 1) ...[
-              Text('เลือกผู้ใช้งาน', style: Nv.ui(13, color: Nv.onNight2, weight: FontWeight.w600)),
+              Text(
+                'เลือกผู้ใช้งาน',
+                style: Nv.ui(13, color: Nv.onNight2, weight: FontWeight.w600),
+              ),
               const SizedBox(height: 10),
               SizedBox(
                 height: 104,
@@ -173,13 +182,27 @@ class _LoginScreenState extends State<LoginScreen> {
                                   const Positioned(
                                     right: -2,
                                     bottom: -2,
-                                    child: CircleAvatar(radius: 10, backgroundColor: Nv.lacquer, child: Icon(NvIcons.lock, size: 9, color: Colors.white)),
+                                    child: CircleAvatar(
+                                      radius: 10,
+                                      backgroundColor: Nv.lacquer,
+                                      child: Icon(NvIcons.lock, size: 9, color: Colors.white),
+                                    ),
                                   ),
                               ],
                             ),
                             const SizedBox(height: 5),
-                            Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Nv.ui(12, color: on ? Nv.gold200 : Nv.onNight2, weight: FontWeight.w600)),
-                            Text(s.role.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: Nv.ui(10, color: Nv.onNight3)),
+                            Text(
+                              s.name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Nv.ui(12, color: on ? Nv.gold200 : Nv.onNight2, weight: FontWeight.w600),
+                            ),
+                            Text(
+                              s.role.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Nv.ui(10, color: Nv.onNight3),
+                            ),
                           ],
                         ),
                       ),
@@ -191,7 +214,10 @@ class _LoginScreenState extends State<LoginScreen> {
             ] else if (sel != null) ...[
               NvAvatar(sel.initials, hue: sel.hue, size: 58, ring: true),
               const SizedBox(height: 6),
-              Text('${sel.name} · ${sel.role.label}', style: Nv.ui(14, color: Nv.onNight, weight: FontWeight.w600)),
+              Text(
+                '${sel.name} · ${sel.role.label}',
+                style: Nv.ui(14, color: Nv.onNight, weight: FontWeight.w600),
+              ),
               const SizedBox(height: 10),
             ],
             if (sel == null)
@@ -225,7 +251,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   actions: (ctx) => [NvButton.gold('เข้าใจแล้ว', onPressed: () => Navigator.of(ctx).pop())],
                 ),
                 icon: const Icon(NvIcons.question, size: 13, color: Nv.gold300),
-                label: Text('ลืม PIN?', style: Nv.ui(13, color: Nv.gold300, weight: FontWeight.w600)),
+                label: Text(
+                  'ลืม PIN?',
+                  style: Nv.ui(13, color: Nv.gold300, weight: FontWeight.w600),
+                ),
               ),
             ],
           ],
@@ -233,58 +262,61 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
 
-    return Scaffold(
-      backgroundColor: Nv.navy950,
-      body: NvBackdrop.night(
-        image: NvAssets.art('login-hero'),
-        imageAlignment: Alignment.centerRight,
-        child: LayoutBuilder(builder: (context, c) {
-          final wide = c.maxWidth > 960;
-          return Stack(
-            children: [
-              // navy wash on the left so the panel reads over the scene
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Nv.navy950.withValues(alpha: wide ? 0.92 : 0.8), Nv.navy950.withValues(alpha: wide ? 0.25 : 0.7)],
-                      stops: const [0.25, 0.75],
+    return MediaQuery.withClampedTextScaling(
+      maxScaleFactor: 1.15,
+      child: Scaffold(
+        backgroundColor: Nv.navy950,
+        body: NvBackdrop.night(
+          image: NvAssets.art('login-hero'),
+          imageAlignment: Alignment.centerRight,
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final wide = c.maxWidth > 960;
+              return Stack(
+                children: [
+                  // navy wash on the left so the panel reads over the scene
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Nv.navy950.withValues(alpha: wide ? 0.92 : 0.8),
+                            Nv.navy950.withValues(alpha: wide ? 0.25 : 0.7),
+                          ],
+                          stops: const [0.25, 0.75],
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              if (wide)
-                Positioned(
-                  right: 30,
-                  bottom: 0,
-                  child: NvArt.mascot('welcome', height: c.maxHeight * 0.72),
-                ),
-              if (wide)
-                Positioned(
-                  top: 22,
-                  right: 28,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
-                    decoration: BoxDecoration(
-                      color: Nv.navy950.withValues(alpha: 0.72),
-                      borderRadius: BorderRadius.circular(Nv.rLg),
-                      border: Border.all(color: Nv.lineNight),
+                  if (wide) Positioned(right: 30, bottom: 0, child: NvArt.mascot('welcome', height: c.maxHeight * 0.72)),
+                  if (wide)
+                    Positioned(
+                      top: 22,
+                      right: 28,
+                      child: Container(
+                        padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
+                        decoration: BoxDecoration(
+                          color: Nv.navy950.withValues(alpha: 0.72),
+                          borderRadius: BorderRadius.circular(Nv.rLg),
+                          border: Border.all(color: Nv.lineNight),
+                        ),
+                        child: const NvClock(night: true, large: true),
+                      ),
                     ),
-                    child: const NvClock(night: true, large: true),
+                  Align(
+                    alignment: wide ? const Alignment(-0.72, 0) : Alignment.center,
+                    child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: panel),
                   ),
-                ),
-              Align(
-                alignment: wide ? const Alignment(-0.72, 0) : Alignment.center,
-                child: SingleChildScrollView(padding: const EdgeInsets.all(20), child: panel),
-              ),
-              Positioned(
-                left: 24,
-                bottom: 14,
-                child: Text('Thai Prompt POS · ธีมโนวา · by xman studio', style: Nv.ui(11.5, color: Nv.onNight3)),
-              ),
-            ],
-          );
-        }),
+                  Positioned(
+                    left: 24,
+                    bottom: 14,
+                    child: Text('Thai Prompt POS · ธีมโนวา · by xman studio', style: Nv.ui(11.5, color: Nv.onNight3)),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
