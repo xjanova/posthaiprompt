@@ -1,74 +1,124 @@
 // Thaiprompt POS — Auto-update service (Android + Windows).
 //
-// Reads the latest published release of the POS (release feed of the project
-// repository — never shown to users), picks the asset for this platform and
-// installs it in place:
-//   • Android  — download the .apk and hand it to the package installer
+// The only update source is xman4289.com (xman studio's product site, which
+// mirrors each release on its side):
+//   check    GET https://xman4289.com/api/v1/product/<slug>/update/check
+//            ?current_version=X.Y.Z
+//            → {has_update, latest_version, download_url, changelog,
+//               sha256, file_size, filename}
+//   download the `download_url` it returns — accepted only over https on
+//            xman4289.com, redirects refused, and kept only when the byte
+//            count and SHA-256 match what the check promised.
+// Then install in place:
+//   • Android  — hand the verified .apk to the package installer
 //                (same signing key → overwrites, keeps shop data).
-//   • Windows  — download the windows .zip, then a small detached PowerShell
-//                helper waits for the app to exit, extracts the files over the
-//                install folder and relaunches the POS.
+//   • Windows  — a small detached PowerShell helper waits for the app to exit,
+//                extracts the verified .zip over the install folder and
+//                relaunches the POS.
 //   • iOS      — not self-installable (App Store / TestFlight).
 //
 // by xman studio
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
-import 'package:dio/dio.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/foundation.dart';
-import 'package:ota_update/ota_update.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+
+/// Product slugs on xman4289.com, one per installer.
+const kUpdateSlugAndroid = 'thaiprompt-pos';
+const kUpdateSlugWindows = 'thaiprompt-pos-windows';
 
 class UpdateInfo {
   final String currentVersion;
   final String latestVersion;
-  final String tag;
 
-  /// Download URL of the installer for THIS platform ('' when none).
+  /// Verified download (https on xman4289.com) — '' when the server offers no
+  /// file this app can check before installing.
   final String assetUrl;
   final String assetName;
   final String releaseNotes; // already cleaned for display
   final int sizeBytes;
-  final DateTime publishedAt;
+  final String sha256; // lowercase hex
+  final bool serverSaysNewer;
 
   UpdateInfo({
     required this.currentVersion,
     required this.latestVersion,
-    required this.tag,
-    required this.assetUrl,
+    this.assetUrl = '',
     this.assetName = '',
-    required this.releaseNotes,
-    required this.sizeBytes,
-    required this.publishedAt,
+    this.releaseNotes = '',
+    this.sizeBytes = 0,
+    this.sha256 = '',
+    this.serverSaysNewer = false,
   });
 
-  /// Back-compat for older callers.
-  String get apkUrl => assetUrl;
+  String get tag => 'v$latestVersion';
 
-  bool get hasUpdate => isNewer(latestVersion, currentVersion);
-  bool get hasInstaller => assetUrl.isNotEmpty;
+  bool get hasUpdate => serverSaysNewer && isNewer(latestVersion, currentVersion);
+  bool get hasInstaller => assetUrl.isNotEmpty && sizeBytes > 0 && sha256.length == 64;
 
+  /// Semver compare; a build suffix (`+7`) breaks a tie only when both carry one.
   static bool isNewer(String latest, String current) {
     final l = _parse(latest);
     final c = _parse(current);
-    for (var i = 0; i < l.length; i++) {
+    for (var i = 0; i < l.length || i < c.length; i++) {
+      final lv = i < l.length ? l[i] : 0;
       final cv = i < c.length ? c[i] : 0;
-      if (l[i] > cv) return true;
-      if (l[i] < cv) return false;
+      if (lv != cv) return lv > cv;
     }
-    return false;
+    final lb = _build(latest), cb = _build(current);
+    return lb != null && cb != null && lb > cb;
   }
 
   static List<int> _parse(String v) {
-    final cleaned = v.split('+').first.replaceAll(RegExp(r'[^\d.]'), '');
+    final cleaned = v.trim().replaceFirst(RegExp(r'^v'), '').split('+').first.replaceAll(RegExp(r'[^\d.]'), '');
     return cleaned.split('.').map(int.tryParse).whereType<int>().toList();
+  }
+
+  static int? _build(String v) => v.contains('+') ? int.tryParse(v.split('+').last.trim()) : null;
+
+  /// Parse an update/check answer. The download is accepted only when it can
+  /// be verified: https on xman4289.com, a 64-hex SHA-256 and a sane size.
+  static UpdateInfo fromCheck(Map<String, dynamic> json, {required String currentVersion}) {
+    String text(Object? v) => v is String ? v.trim() : '';
+    int? whole(Object? v) {
+      if (v is int) return v;
+      if (v is double && v == v.truncateToDouble()) return v.toInt();
+      if (v is String) return int.tryParse(v.trim());
+      return null;
+    }
+
+    final latest = text(json['latest_version']).replaceFirst(RegExp(r'^v'), '');
+    final version = RegExp(r'^\d+(\.\d+)*(\+\d+)?$').hasMatch(latest) ? latest : currentVersion;
+    final url = Uri.tryParse(text(json['download_url']));
+    final sha = text(json['sha256']).toLowerCase();
+    final size = whole(json['file_size']) ?? 0;
+    final verifiable = url != null &&
+        AutoUpdater.isAllowedDownload(url) &&
+        RegExp(r'^[0-9a-f]{64}$').hasMatch(sha) &&
+        size > 0 &&
+        size <= AutoUpdater.maxBytes;
+    return UpdateInfo(
+      currentVersion: currentVersion,
+      latestVersion: version,
+      assetUrl: verifiable ? url.toString() : '',
+      assetName: verifiable ? text(json['filename']) : '',
+      releaseNotes: cleanReleaseNotes(text(json['changelog'])),
+      sizeBytes: verifiable ? size : 0,
+      sha256: verifiable ? sha : '',
+      serverSaysNewer: json['has_update'] == true,
+    );
   }
 }
 
-/// Release notes shown in the app: drop hosting/build-system lines and URLs.
+/// Release notes shown in the app: plain text, no links or build-system lines.
 String cleanReleaseNotes(String raw) {
   final out = <String>[];
   for (final line in raw.split(RegExp(r'\r?\n'))) {
@@ -86,12 +136,35 @@ String cleanReleaseNotes(String raw) {
   return out.join('\n').replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
 }
 
-class AutoUpdater {
-  final String owner;
-  final String repo;
-  final Dio _dio;
+/// Download or verification failure, with a Thai message for the UI.
+class UpdateException implements Exception {
+  final String message;
+  const UpdateException(this.message);
+  @override
+  String toString() => message;
+}
 
-  AutoUpdater({required this.owner, required this.repo, Dio? dio}) : _dio = dio ?? Dio();
+class AutoUpdater {
+  /// The only host the app checks or downloads updates from.
+  static const host = 'xman4289.com';
+
+  /// Refuse anything bigger, whatever the server claims.
+  static const maxBytes = 1024 * 1024 * 1024;
+
+  /// Longest wait for the next piece of a download before giving up.
+  static const stallTimeout = Duration(seconds: 30);
+
+  static const _installer = MethodChannel('tp/installer');
+
+  /// Product slug (defaults to this platform's installer).
+  final String slug;
+
+  /// Test hook: where update/check lives (defaults to https://xman4289.com).
+  final Uri? checkBase;
+
+  AutoUpdater({String? slug, this.checkBase}) : slug = slug ?? _platformSlug();
+
+  static String _platformSlug() => !kIsWeb && Platform.isWindows ? kUpdateSlugWindows : kUpdateSlugAndroid;
 
   /// This platform can download + install updates by itself.
   static bool get canSelfInstall => !kIsWeb && (Platform.isAndroid || Platform.isWindows);
@@ -105,48 +178,115 @@ class AutoUpdater {
     return Platform.operatingSystem;
   }
 
-  /// Latest published release, or null if unreachable / none yet.
-  Future<UpdateInfo?> checkForUpdate() async {
+  /// https on xman4289.com (or www.), default port, no credentials.
+  static bool isAllowedDownload(Uri u) =>
+      u.scheme == 'https' &&
+      (u.host == host || u.host == 'www.$host') &&
+      u.userInfo.isEmpty &&
+      (!u.hasPort || u.port == 443);
+
+  Uri _checkUri(String current) {
+    final base = checkBase ?? Uri.https(host, '/');
+    return base.replace(
+      path: '/api/v1/product/$slug/update/check',
+      queryParameters: {'current_version': current},
+    );
+  }
+
+  /// What the site offers for this installer, or null when it can't be asked
+  /// (offline, server error, product not published yet).
+  Future<UpdateInfo?> checkForUpdate({String? currentVersion}) async {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
     try {
-      final pkg = await PackageInfo.fromPlatform();
-      final res = await _dio.get<Map<String, dynamic>>(
-        'https://api.github.com/repos/$owner/$repo/releases/latest',
-        options: Options(
-          headers: const {'Accept': 'application/vnd.github+json'},
-          receiveTimeout: const Duration(seconds: 15),
-          sendTimeout: const Duration(seconds: 15),
-        ),
-      );
-      final data = res.data;
-      if (data == null) return null;
-
-      final tag = data['tag_name'] as String? ?? '';
-      final published = DateTime.tryParse(data['published_at'] as String? ?? '') ?? DateTime.now();
-      final assets = (data['assets'] as List? ?? const []).cast<Map<String, dynamic>>();
-
-      bool wanted(String name) {
-        final n = name.toLowerCase();
-        if (kIsWeb) return false;
-        if (Platform.isAndroid) return n.endsWith('.apk');
-        if (Platform.isWindows) return n.endsWith('.zip') && n.contains('windows');
-        return false;
-      }
-
-      final asset = assets.firstWhere((a) => wanted(a['name'] as String? ?? ''), orElse: () => const {});
-      return UpdateInfo(
-        currentVersion: pkg.version,
-        latestVersion: tag.replaceAll(RegExp(r'^v'), ''),
-        tag: tag,
-        assetUrl: asset['browser_download_url'] as String? ?? '',
-        assetName: asset['name'] as String? ?? '',
-        releaseNotes: cleanReleaseNotes(data['body'] as String? ?? ''),
-        sizeBytes: (asset['size'] as num?)?.toInt() ?? 0,
-        publishedAt: published,
-      );
+      final current = currentVersion ?? (await PackageInfo.fromPlatform()).version;
+      final req = await client.getUrl(_checkUri(current)).timeout(const Duration(seconds: 15));
+      req.followRedirects = false;
+      req.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      final res = await req.close().timeout(const Duration(seconds: 15));
+      final bytes = await res.fold<List<int>>(<int>[], (a, b) => a..addAll(b)).timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) return null;
+      // The server sends JSON without a charset; it is UTF-8 (Thai notes).
+      final data = jsonDecode(utf8.decode(bytes));
+      if (data is! Map) return null;
+      return UpdateInfo.fromCheck(data.cast<String, dynamic>(), currentVersion: current);
     } catch (e) {
       debugPrint('AutoUpdater.checkForUpdate failed: $e');
       return null;
+    } finally {
+      client.close(force: true);
     }
+  }
+
+  /// Stream [url] into [target], refusing redirects, and keep the file only
+  /// when it has exactly [size] bytes with SHA-256 [sha256]. Throws
+  /// [UpdateException] (and removes the partial file) otherwise.
+  static Future<File> downloadVerified(
+    Uri url,
+    File target, {
+    required int size,
+    required String sha256,
+    void Function(double percent)? onProgress,
+  }) async {
+    final part = File('${target.path}.part');
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
+    IOSink? sink;
+    try {
+      final req = await client.getUrl(url).timeout(stallTimeout);
+      req.followRedirects = false; // a redirect would leave the update site
+      final res = await req.close().timeout(stallTimeout);
+      if (res.statusCode == 503) throw const UpdateException('เซิร์ฟเวอร์อัปเดตมีผู้ดาวน์โหลดเต็ม — ลองใหม่อีกสักครู่');
+      if (res.statusCode != 200) throw const UpdateException('ดาวน์โหลดไม่สำเร็จ — ลองใหม่อีกครั้ง');
+      final type = res.headers.contentType?.mimeType ?? '';
+      if (type.startsWith('text/') || type == 'application/json') {
+        throw const UpdateException('เซิร์ฟเวอร์ไม่ได้ส่งไฟล์ติดตั้ง — ลองใหม่อีกครั้ง');
+      }
+      if (res.contentLength >= 0 && res.contentLength != size) {
+        throw const UpdateException('ขนาดไฟล์อัปเดตไม่ตรง — ลองใหม่อีกครั้ง');
+      }
+      final digest = _DigestSink();
+      final hasher = crypto.sha256.startChunkedConversion(digest);
+      if (await part.exists()) await part.delete();
+      sink = part.openWrite();
+      var received = 0;
+      await for (final chunk in res.timeout(stallTimeout)) {
+        received += chunk.length;
+        if (received > size) throw const UpdateException('ไฟล์อัปเดตใหญ่กว่าที่ประกาศ — ยกเลิกการติดตั้ง');
+        hasher.add(chunk);
+        sink.add(chunk);
+        onProgress?.call(received / size * 100);
+      }
+      await sink.flush();
+      await sink.close();
+      sink = null;
+      hasher.close();
+      if (received != size) throw const UpdateException('ดาวน์โหลดไม่ครบ — ลองใหม่อีกครั้ง');
+      if (digest.value.toString() != sha256) {
+        throw const UpdateException('ไฟล์อัปเดตไม่ผ่านการตรวจสอบความถูกต้อง — ยกเลิกการติดตั้ง');
+      }
+      if (await target.exists()) await target.delete();
+      return part.rename(target.path);
+    } on UpdateException {
+      await _discard(sink, part);
+      rethrow;
+    } on TimeoutException {
+      await _discard(sink, part);
+      throw const UpdateException('การดาวน์โหลดหยุดนิ่ง — ตรวจอินเทอร์เน็ตแล้วลองใหม่');
+    } catch (e) {
+      debugPrint('AutoUpdater.downloadVerified failed: $e');
+      await _discard(sink, part);
+      throw const UpdateException('ดาวน์โหลดไม่สำเร็จ — ตรวจอินเทอร์เน็ตแล้วลองใหม่');
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  static Future<void> _discard(IOSink? sink, File part) async {
+    try {
+      await sink?.close();
+    } catch (_) {}
+    try {
+      if (await part.exists()) await part.delete();
+    } catch (_) {}
   }
 
   /// Download + install for this platform. On Windows [onBeforeRestart] runs
@@ -162,118 +302,86 @@ class AutoUpdater {
       onError?.call('ยังไม่มีไฟล์ติดตั้งสำหรับ $platformLabel ในเวอร์ชันนี้');
       return;
     }
-    if (!kIsWeb && Platform.isWindows) {
-      await _installWindows(info, onProgress: onProgress, onError: onError, onBeforeRestart: onBeforeRestart);
-      return;
+    try {
+      if (!kIsWeb && Platform.isWindows) {
+        await _installWindows(info, onProgress: onProgress, onBeforeRestart: onBeforeRestart);
+      } else if (!kIsWeb && Platform.isAndroid) {
+        await _installAndroid(info, onProgress: onProgress);
+        onComplete?.call();
+      } else {
+        onError?.call('$platformLabel ต้องติดตั้งเวอร์ชันใหม่ผ่านร้านค้าแอป');
+      }
+    } on UpdateException catch (e) {
+      onError?.call(e.message);
+    } catch (e) {
+      debugPrint('AutoUpdater.downloadAndInstall failed: $e');
+      onError?.call('อัปเดตไม่สำเร็จ — ลองใหม่อีกครั้ง');
     }
-    if (!kIsWeb && Platform.isAndroid) {
-      await _installAndroid(info, onProgress: onProgress, onError: onError, onComplete: onComplete);
-      return;
-    }
-    onError?.call('$platformLabel ต้องติดตั้งเวอร์ชันใหม่ผ่านร้านค้าแอป');
   }
 
-  Future<void> _installAndroid(
-    UpdateInfo info, {
-    void Function(double percent, String status)? onProgress,
-    void Function(String error)? onError,
-    void Function()? onComplete,
-  }) async {
+  Future<void> _installAndroid(UpdateInfo info, {void Function(double percent, String status)? onProgress}) async {
     // Android 8+: REQUEST_INSTALL_PACKAGES + user-granted "install unknown apps".
     final installPerm = await Permission.requestInstallPackages.status;
     if (!installPerm.isGranted) {
       final asked = await Permission.requestInstallPackages.request();
       if (!asked.isGranted) {
-        onError?.call('ยังไม่ได้อนุญาตให้ติดตั้งแอป — เปิดสิทธิ์ "ติดตั้งแอปที่ไม่รู้จัก" ให้ Thai Prompt POS แล้วลองอีกครั้ง');
-        return;
+        throw const UpdateException('ยังไม่ได้อนุญาตให้ติดตั้งแอป — เปิดสิทธิ์ "ติดตั้งแอปที่ไม่รู้จัก" ให้ Thai Prompt POS แล้วลองอีกครั้ง');
       }
     }
-    final done = Completer<void>();
+    final dir = await getTemporaryDirectory();
+    onProgress?.call(0, 'กำลังดาวน์โหลด 0%');
+    final apk = await downloadVerified(
+      Uri.parse(info.assetUrl),
+      File(p.join(dir.path, 'thaiprompt-pos-update.apk')),
+      size: info.sizeBytes,
+      sha256: info.sha256,
+      onProgress: (pct) => onProgress?.call(pct, 'กำลังดาวน์โหลด ${pct.toStringAsFixed(0)}%'),
+    );
+    onProgress?.call(100, 'ตรวจสอบไฟล์แล้ว — เปิดหน้าติดตั้ง');
     try {
-      OtaUpdate().execute(info.assetUrl, destinationFilename: 'thaiprompt-pos-${info.tag}.apk').listen(
-        (event) {
-          final pct = double.tryParse(event.value ?? '0') ?? 0.0;
-          final s = event.status.toString().split('.').last;
-          if (s == 'DOWNLOADING') {
-            onProgress?.call(pct, 'กำลังดาวน์โหลด ${pct.toStringAsFixed(0)}%');
-          } else if (s == 'INSTALLING') {
-            onProgress?.call(100, 'กำลังติดตั้ง…');
-          } else if (s == 'INSTALLATION_DONE') {
-            onProgress?.call(100, 'ติดตั้งเสร็จ — กำลังเปิดแอปใหม่');
-          } else if (s == 'ALREADY_RUNNING_ERROR') {
-            onError?.call('การอัปเดตกำลังทำงานอยู่');
-          } else if (s == 'PERMISSION_NOT_GRANTED_ERROR') {
-            onError?.call('ไม่ได้รับสิทธิ์ติดตั้งแอป');
-          } else if (s == 'INTERNAL_ERROR' || s == 'INSTALLATION_ERROR') {
-            onError?.call('ติดตั้งไม่สำเร็จ — ${event.value ?? ''}');
-          } else if (s == 'DOWNLOAD_ERROR') {
-            onError?.call('ดาวน์โหลดไม่สำเร็จ — ตรวจสอบอินเทอร์เน็ต');
-          } else if (s == 'CHECKSUM_ERROR') {
-            onError?.call('ไฟล์ที่ดาวน์โหลดเสียหาย — ลองใหม่อีกครั้ง');
-          }
-        },
-        onDone: () {
-          onComplete?.call();
-          if (!done.isCompleted) done.complete();
-        },
-        onError: (Object e) {
-          onError?.call('อัปเดตไม่สำเร็จ: $e');
-          if (!done.isCompleted) done.complete();
-        },
-      );
-    } catch (e) {
-      onError?.call('อัปเดตไม่สำเร็จ: $e');
-      if (!done.isCompleted) done.complete();
+      await _installer.invokeMethod<bool>('installApk', {'filePath': apk.path});
+    } on PlatformException catch (e) {
+      debugPrint('installApk failed: ${e.code} ${e.message}');
+      throw const UpdateException('เปิดหน้าติดตั้งไม่ได้ — ลองใหม่อีกครั้ง');
     }
-    return done.future;
   }
 
   Future<void> _installWindows(
     UpdateInfo info, {
     void Function(double percent, String status)? onProgress,
-    void Function(String error)? onError,
     Future<void> Function()? onBeforeRestart,
   }) async {
+    final exe = Platform.resolvedExecutable;
+    final installDir = p.dirname(exe);
+
+    // The helper copies files into the install folder — it must be writable.
     try {
-      final exe = Platform.resolvedExecutable;
-      final installDir = p.dirname(exe);
+      final probe = File(p.join(installDir, '.tp_update_probe'));
+      await probe.writeAsString('ok', flush: true);
+      await probe.delete();
+    } catch (_) {
+      throw const UpdateException(
+          'โฟลเดอร์ที่ติดตั้งแอปไม่อนุญาตให้เขียนไฟล์ — ย้ายโฟลเดอร์ Thai Prompt POS ไปไว้ที่ C:\\ThaipromptPOS หรือเปิดแอปด้วยสิทธิ์ผู้ดูแลระบบ แล้วลองใหม่');
+    }
 
-      // The helper copies files into the install folder — it must be writable.
-      try {
-        final probe = File(p.join(installDir, '.tp_update_probe'));
-        await probe.writeAsString('ok', flush: true);
-        await probe.delete();
-      } catch (_) {
-        onError?.call('โฟลเดอร์ที่ติดตั้งแอปไม่อนุญาตให้เขียนไฟล์ — ย้ายโฟลเดอร์ Thai Prompt POS ไปไว้ที่ C:\\ThaipromptPOS หรือเปิดแอปด้วยสิทธิ์ผู้ดูแลระบบ แล้วลองใหม่');
-        return;
-      }
+    final work = Directory(p.join(Directory.systemTemp.path, 'thaiprompt_pos_update'));
+    if (await work.exists()) await work.delete(recursive: true);
+    await work.create(recursive: true);
 
-      final work = Directory(p.join(Directory.systemTemp.path, 'thaiprompt_pos_update'));
-      if (await work.exists()) await work.delete(recursive: true);
-      await work.create(recursive: true);
-      final zip = p.join(work.path, 'update.zip');
+    onProgress?.call(0, 'กำลังดาวน์โหลด 0%');
+    final zip = await downloadVerified(
+      Uri.parse(info.assetUrl),
+      File(p.join(work.path, 'update.zip')),
+      size: info.sizeBytes,
+      sha256: info.sha256,
+      onProgress: (pct) => onProgress?.call(pct, 'กำลังดาวน์โหลด ${pct.toStringAsFixed(0)}%'),
+    );
 
-      onProgress?.call(0, 'กำลังดาวน์โหลด 0%');
-      await _dio.download(
-        info.assetUrl,
-        zip,
-        onReceiveProgress: (got, total) {
-          final t = total > 0 ? total : (info.sizeBytes > 0 ? info.sizeBytes : 0);
-          final pct = t > 0 ? (got / t * 100).clamp(0, 100).toDouble() : 0.0;
-          onProgress?.call(pct, 'กำลังดาวน์โหลด ${pct.toStringAsFixed(0)}%');
-        },
-      );
-      final size = await File(zip).length();
-      if (size < 1024 * 1024) {
-        onError?.call('ไฟล์อัปเดตไม่สมบูรณ์ — ลองใหม่อีกครั้ง');
-        return;
-      }
-
-      onProgress?.call(100, 'ดาวน์โหลดเสร็จ — กำลังติดตั้งและเปิดแอปใหม่');
-      // ASCII-only script (PowerShell 5 misreads non-BOM UTF-8). Never name a
-      // variable $pid — it's PowerShell's read-only automatic variable.
-      final script = File(p.join(work.path, 'apply-update.ps1'));
-      await script.writeAsString(r'''
+    onProgress?.call(100, 'ตรวจสอบไฟล์แล้ว — กำลังติดตั้งและเปิดแอปใหม่');
+    // ASCII-only script (PowerShell 5 misreads non-BOM UTF-8). Never name a
+    // variable $pid — it's PowerShell's read-only automatic variable.
+    final script = File(p.join(work.path, 'apply-update.ps1'));
+    await script.writeAsString(r'''
 param([int]$AppPid, [string]$Zip, [string]$Target, [string]$Exe)
 $ErrorActionPreference = 'Stop'
 $log = Join-Path (Split-Path $Zip) 'apply-update.log'
@@ -294,26 +402,35 @@ try {
 Start-Process -FilePath (Join-Path $Target $Exe) -WorkingDirectory $Target
 ''');
 
-      if (onBeforeRestart != null) await onBeforeRestart();
-      await Process.start(
-        'powershell.exe',
-        [
-          '-NoProfile',
-          '-ExecutionPolicy', 'Bypass',
-          '-WindowStyle', 'Hidden',
-          '-File', script.path,
-          '-AppPid', '$pid',
-          '-Zip', zip,
-          '-Target', installDir,
-          '-Exe', p.basename(exe),
-        ],
-        mode: ProcessStartMode.detached,
-      );
-      // Give the helper a moment to start, then quit so files can be replaced.
-      await Future<void>.delayed(const Duration(milliseconds: 600));
-      exit(0);
-    } catch (e) {
-      onError?.call('อัปเดตไม่สำเร็จ: $e');
-    }
+    if (onBeforeRestart != null) await onBeforeRestart();
+    await Process.start(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-WindowStyle', 'Hidden',
+        '-File', script.path,
+        '-AppPid', '$pid',
+        '-Zip', zip.path,
+        '-Target', installDir,
+        '-Exe', p.basename(exe),
+      ],
+      mode: ProcessStartMode.detached,
+    );
+    // Give the helper a moment to start, then quit so files can be replaced.
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    exit(0);
   }
+}
+
+/// Collects the single digest a chunked SHA-256 conversion emits.
+class _DigestSink implements Sink<crypto.Digest> {
+  crypto.Digest? _value;
+  crypto.Digest get value => _value!;
+
+  @override
+  void add(crypto.Digest data) => _value = data;
+
+  @override
+  void close() {}
 }

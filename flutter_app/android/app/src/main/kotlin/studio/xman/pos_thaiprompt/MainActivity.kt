@@ -2,6 +2,7 @@ package studio.xman.pos_thaiprompt
 
 import android.app.Presentation
 import android.content.Context
+import android.content.Intent
 import android.hardware.display.DisplayManager
 import android.os.Bundle
 import android.view.Display
@@ -12,6 +13,8 @@ import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
+import androidx.core.content.FileProvider
+import java.io.File
 
 /**
  * Thai Prompt POS — customer-facing second screen on dual-display Android POS
@@ -23,6 +26,10 @@ import io.flutter.plugin.common.MethodChannel
  * The second display runs its own Flutter engine on the Dart entrypoint
  * `customerDisplayMain`, which reads snapshots from channel
  * "tp/customer_display" (getState + pushed "state" calls).
+ *
+ * Channel "tp/installer": installApk {filePath} — opens the system installer
+ * for an update the Dart side already downloaded from xman4289.com and
+ * verified (size + SHA-256), shared through the app's FileProvider.
  */
 class MainActivity : FlutterActivity() {
     private var presentation: CustomerPresentation? = null
@@ -53,6 +60,40 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "tp/installer")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "installApk") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                val path = call.argument<String>("filePath")
+                if (path == null) {
+                    result.error("INVALID_ARG", "filePath is required", null)
+                    return@setMethodCallHandler
+                }
+                installApk(path, result)
+            }
+    }
+
+    private fun installApk(path: String, result: MethodChannel.Result) {
+        try {
+            val file = File(path)
+            // only files this app wrote into its own cache
+            if (!file.exists() || !file.canonicalPath.startsWith(cacheDir.canonicalPath)) {
+                result.error("FILE_NOT_FOUND", "update file missing", null)
+                return
+            }
+            val uri = FileProvider.getUriForFile(this, "$packageName.update_provider", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+            result.success(true)
+        } catch (e: Exception) {
+            result.error("INSTALL_FAILED", e.message, null)
+        }
     }
 
     private fun displayManager(): DisplayManager =

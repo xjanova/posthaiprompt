@@ -1,9 +1,10 @@
 // Thaiprompt POS — background update watcher + update dialog.
 //
-// Checks for a newer release 20 s after launch and every 6 hours. When one is
-// found the top bar shows a gold "อัปเดต" pill; the login screen installs it by
-// itself (with a cancellable countdown) when auto-update is on and nobody is
-// mid-sale. Installing from a staff screen needs a manager.
+// Asks xman4289.com for a newer release 20 s after launch and every 6 hours.
+// When one is found the top bar shows a gold "อัปเดต" pill; the login screen
+// installs it by itself (with a cancellable countdown) when auto-update is on
+// and nobody is mid-sale. Installing from a staff screen needs a manager.
+// Downloads are verified (size + SHA-256) before anything is installed.
 //
 // by xman studio
 
@@ -19,10 +20,7 @@ class UpdateWatcher extends ChangeNotifier {
   UpdateWatcher._();
   static final UpdateWatcher instance = UpdateWatcher._();
 
-  static const owner = 'xjanova';
-  static const repo = 'posthaiprompt';
-
-  final AutoUpdater _updater = AutoUpdater(owner: owner, repo: repo);
+  final AutoUpdater _updater = AutoUpdater();
 
   UpdateInfo? available;
   DateTime? lastCheck;

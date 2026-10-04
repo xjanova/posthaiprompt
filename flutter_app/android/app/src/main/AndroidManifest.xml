@@ -49,15 +49,16 @@
             </intent-filter>
         </activity>
 
-        <!-- ota_update FileProvider — required to launch APK install intent on Android 7+. -->
+        <!-- Shares a verified update .apk (app cache) with the system installer
+             (MainActivity "tp/installer"); required for Android 7+ content:// URIs. -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.ota_update_provider"
+            android:authorities="${applicationId}.update_provider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/ota_update_file_provider_paths"/>
+                android:resource="@xml/update_file_paths"/>
         </provider>
 
         <meta-data
@@ -70,7 +71,7 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
-        <!-- Required for ota_update on Android 11+ to query install activities -->
+        <!-- Lets the app see the system package installer on Android 11+ -->
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:mimeType="application/vnd.android.package-archive"/>

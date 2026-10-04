@@ -656,7 +656,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     setState(() {
       if (info == null) {
-        _checkMsg = 'ตรวจสอบไม่ได้ — ตรวจอินเทอร์เน็ต หรือยังไม่มีไฟล์ติดตั้งในรุ่นล่าสุด';
+        _checkMsg = 'ตรวจสอบไม่ได้ — ตรวจอินเทอร์เน็ตแล้วลองใหม่ (เซิร์ฟเวอร์อัปเดต xman4289.com)';
       } else if (!info.hasUpdate) {
         _checkMsg = 'ใช้เวอร์ชันล่าสุดแล้ว (v${info.currentVersion})';
       }
@@ -1487,7 +1487,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                   if (info != null) ...[
                     const SizedBox(height: 10),
-                    NvKeyValue('เผยแพร่เมื่อ', thaiDate(info.publishedAt), mono: false),
                     if (info.sizeBytes > 0) NvKeyValue('ขนาดไฟล์', '${(info.sizeBytes / 1048576).toStringAsFixed(1)} MB'),
                     if (notes.isNotEmpty) ...[
                       const SizedBox(height: 6),
