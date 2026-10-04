@@ -154,6 +154,9 @@ class AutoUpdater {
   /// Longest wait for the next piece of a download before giving up.
   static const stallTimeout = Duration(seconds: 30);
 
+  /// Shortest wait after a 503 "slots full" answer (tests lower it).
+  static int busyMinWait = 5;
+
   static const _installer = MethodChannel('tp/installer');
 
   /// Product slug (defaults to this platform's installer).
@@ -226,6 +229,29 @@ class AutoUpdater {
     required int size,
     required String sha256,
     void Function(double percent)? onProgress,
+    void Function(int seconds)? onBusyWait,
+    int busyRetries = 2,
+  }) async {
+    // All download slots taken (503 + Retry-After): wait and try again.
+    for (var attempt = 0;; attempt++) {
+      try {
+        return await _downloadOnce(url, target, size: size, sha256: sha256, onProgress: onProgress);
+      } on _Busy catch (b) {
+        if (attempt >= busyRetries) {
+          throw const UpdateException('เซิร์ฟเวอร์อัปเดตมีผู้ดาวน์โหลดเต็ม — ลองใหม่อีกสักครู่');
+        }
+        onBusyWait?.call(b.seconds);
+        await Future<void>.delayed(Duration(seconds: b.seconds));
+      }
+    }
+  }
+
+  static Future<File> _downloadOnce(
+    Uri url,
+    File target, {
+    required int size,
+    required String sha256,
+    void Function(double percent)? onProgress,
   }) async {
     final part = File('${target.path}.part');
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
@@ -234,7 +260,11 @@ class AutoUpdater {
       final req = await client.getUrl(url).timeout(stallTimeout);
       req.followRedirects = false; // a redirect would leave the update site
       final res = await req.close().timeout(stallTimeout);
-      if (res.statusCode == 503) throw const UpdateException('เซิร์ฟเวอร์อัปเดตมีผู้ดาวน์โหลดเต็ม — ลองใหม่อีกสักครู่');
+      if (res.statusCode == 503) {
+        final after = int.tryParse(res.headers.value(HttpHeaders.retryAfterHeader) ?? '') ?? 20;
+        await res.drain<void>();
+        throw _Busy(after.clamp(busyMinWait, 60));
+      }
       if (res.statusCode != 200) throw const UpdateException('ดาวน์โหลดไม่สำเร็จ — ลองใหม่อีกครั้ง');
       final type = res.headers.contentType?.mimeType ?? '';
       if (type.startsWith('text/') || type == 'application/json') {
@@ -266,6 +296,9 @@ class AutoUpdater {
       if (await target.exists()) await target.delete();
       return part.rename(target.path);
     } on UpdateException {
+      await _discard(sink, part);
+      rethrow;
+    } on _Busy {
       await _discard(sink, part);
       rethrow;
     } on TimeoutException {
@@ -336,6 +369,7 @@ class AutoUpdater {
       size: info.sizeBytes,
       sha256: info.sha256,
       onProgress: (pct) => onProgress?.call(pct, 'กำลังดาวน์โหลด ${pct.toStringAsFixed(0)}%'),
+      onBusyWait: (s) => onProgress?.call(0, 'ผู้ดาวน์โหลดเต็ม — จะลองใหม่ใน $s วินาที'),
     );
     onProgress?.call(100, 'ตรวจสอบไฟล์แล้ว — เปิดหน้าติดตั้ง');
     try {
@@ -375,6 +409,7 @@ class AutoUpdater {
       size: info.sizeBytes,
       sha256: info.sha256,
       onProgress: (pct) => onProgress?.call(pct, 'กำลังดาวน์โหลด ${pct.toStringAsFixed(0)}%'),
+      onBusyWait: (s) => onProgress?.call(0, 'ผู้ดาวน์โหลดเต็ม — จะลองใหม่ใน $s วินาที'),
     );
 
     onProgress?.call(100, 'ตรวจสอบไฟล์แล้ว — กำลังติดตั้งและเปิดแอปใหม่');
@@ -421,6 +456,12 @@ Start-Process -FilePath (Join-Path $Target $Exe) -WorkingDirectory $Target
     await Future<void>.delayed(const Duration(milliseconds: 600));
     exit(0);
   }
+}
+
+/// 503 from the download slot pool; [seconds] = Retry-After.
+class _Busy implements Exception {
+  final int seconds;
+  const _Busy(this.seconds);
 }
 
 /// Collects the single digest a chunked SHA-256 conversion emits.

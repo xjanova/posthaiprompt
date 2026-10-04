@@ -88,7 +88,11 @@ void main() {
     final payload = List<int>.generate(300000, (i) => i % 251);
     final payloadSha = crypto.sha256.convert(payload).toString();
 
+    var busyHits = 0;
+
     setUp(() async {
+      busyHits = 0;
+      AutoUpdater.busyMinWait = 0;
       dir = Directory.systemTemp.createTempSync('tp_upd');
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       server.listen((req) async {
@@ -118,6 +122,15 @@ void main() {
             r.write('<html>login</html>');
           case '/busy':
             r.statusCode = 503;
+            r.headers.set(HttpHeaders.retryAfterHeader, '1');
+          case '/busy-once':
+            if (busyHits++ == 0) {
+              r.statusCode = 503;
+              r.headers.set(HttpHeaders.retryAfterHeader, '1');
+            } else {
+              r.headers.contentType = ContentType('application', 'octet-stream');
+              r.add(payload);
+            }
           default:
             r.statusCode = 404;
         }
@@ -158,6 +171,14 @@ void main() {
     test('chunked answer without Content-Length still verifies', () async {
       final f = await AutoUpdater.downloadVerified(u('/chunked'), target(), size: payload.length, sha256: payloadSha);
       expect(f.lengthSync(), payload.length);
+    });
+
+    test('503 "slots full" waits Retry-After and retries', () async {
+      final waits = <int>[];
+      final f = await AutoUpdater.downloadVerified(u('/busy-once'), target(),
+          size: payload.length, sha256: payloadSha, onBusyWait: waits.add);
+      expect(f.lengthSync(), payload.length);
+      expect(waits, [1]);
     });
 
     Future<void> refused(String path, {int? size, String? sha}) async {
