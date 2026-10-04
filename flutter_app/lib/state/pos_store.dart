@@ -383,7 +383,10 @@ class PosStore extends ChangeNotifier {
     _persist();
   }
 
-  String _id(String prefix) => '$prefix-${_now().microsecondsSinceEpoch.toRadixString(36)}';
+  // Clock + counter: the Windows clock can return the same microsecond for two
+  // ids created back to back, so time alone is not unique.
+  int _idSeq = 0;
+  String _id(String prefix) => '$prefix-${_now().microsecondsSinceEpoch.toRadixString(36)}${(_idSeq++ % 1296).toRadixString(36).padLeft(2, '0')}';
 
   // ─────────────────────────── audit ───────────────────────────
 
@@ -2538,6 +2541,11 @@ class PosStore extends ChangeNotifier {
       final old = categoryById(n.id);
       if (old != null) n.iconKey = old.iconKey;
     }
+    // categories made on this POS that products still use stay (the online
+    // catalog doesn't know them — dropping them would orphan those products)
+    final serverIds = next.map((c) => c.id).toSet();
+    final used = products.map((p) => p.categoryId).toSet();
+    next.addAll(categories.where((c) => !serverIds.contains(c.id) && used.contains(c.id)));
     categories
       ..clear()
       ..addAll(next);

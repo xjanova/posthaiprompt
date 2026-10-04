@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:pos_thaiprompt/data/local_store.dart';
 import 'package:pos_thaiprompt/display/display_snapshot.dart';
+import 'package:pos_thaiprompt/models/catalog_models.dart';
 import 'package:pos_thaiprompt/models/extra_models.dart';
 import 'package:pos_thaiprompt/models/order_models.dart';
 import 'package:pos_thaiprompt/state/pos_store.dart';
@@ -45,6 +46,20 @@ void main() {
     expect(s.productByCode('TT-01')!.serverId, 881);
     expect(s.productByCode('CP-10')!.serverId, 882);
     expect(s.productByCode('CR-21')!.serverId, isNull);
+  });
+
+  test('category sync keeps local categories that products still use', () {
+    final s = signedIn();
+    final mine = s.addCategory('เมนูพิเศษของร้าน');
+    final unused = s.addCategory('หมวดว่าง');
+    s.upsertProduct(Product(id: 'LOC-1', code: 'LOC-1', name: 'ข้าวผัดสูตรร้าน', price: 60, categoryId: mine.id, hue: 30));
+    s.upsertCategoriesFromApi([
+      {'id': 1, 'name': 'ของเย็น'},
+      {'id': 2, 'name': 'กาแฟ'},
+    ]);
+    final ids = s.categories.map((c) => c.id).toList();
+    expect(ids, containsAll(['1', '2', mine.id]));
+    expect(ids.contains(unused.id), isFalse);
   });
 
   test('request items: one row per product with id + sku, options go to the note', () {
